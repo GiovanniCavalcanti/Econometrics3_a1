@@ -68,12 +68,9 @@ pce_filter <- filter(merged_df, LastDate >= as.Date("1960-04-01") & LastDate <= 
   select("LastDate", "inflation_pce", "quarter")
 
 # Join the first two dataframes
-joined_df <- full_join(punew_puxhs_filter, puxx_filter, by = "LastDate")
-
-# Now join the third dataframe with the result of the first join
-original_df <- full_join(joined_df, pce_filter, by = "LastDate") %>%
-  mutate(sequence = row_number()) %>%
-  mutate(group = 1951+(sequence - 1) %/% 4 + 1) %>%
+original_df <- full_join(punew_puxhs_filter, puxx_filter, by = "LastDate") %>%
+  full_join(., pce_filter, by = "LastDate")  %>%
+  mutate(group = year(LastDate)) %>%
   select("LastDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
 
 punew_year <- original_df %>%
@@ -98,9 +95,11 @@ original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
   
 rm(pce_year, punew_year, puxhs_year, puxx_year)
 
-# Calculate the mean, standard deviation for each series
+
 summary_stats <- original_year_df %>%
   summarise(across(c(punew_year, puxhs_year, puxx_year, pce_year), list(
     mean = ~mean(.x, na.rm = TRUE),
-    sd = ~sd(.x, na.rm = TRUE)
+    sd = ~sd(.x, na.rm = TRUE),
+    se = ~sd(.x, na.rm = TRUE) / sqrt(sum(!is.na(.x))) # Standard Error of the mean
   )))
+
