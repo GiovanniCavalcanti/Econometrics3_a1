@@ -1,27 +1,74 @@
-# 01 Packages and environment -----------------------
+# 01 Packages and envirnment -----------------------
 
 rm(list = ls()) 
-setwd("C:/Users/Giovanni Cavalcanti/OneDrive - Insper - Institudo de Ensino e Pesquisa/trimestre_4/econometrics 3/replication assignments/replication_a1")
 
 # to install the Bureau of Labor Statistics API
-## library(devtools)
-## install_github("mikeasilva/blsAPI")
+library(devtools)
+install_github("mikeasilva/blsAPI")
 
 library(tidyverse)
 library(dplyr)
+library(blsAPI)
+library(rjson)
 library(quantmod)
 
 # 02 Fetch inflation data -----------------------
+
+
+
 ## Fetch PUNEW
-punew_df <- read_csv("punew_1947-2023.csv")
+punew_y <- list()
+# loop by year
+for (y in 1947:2023) {
+  payload_punew <- list(
+    'seriesid'=c('CUSR0000SA0'),
+    'startyear'=y,
+    'endyear'=y)
+  response_punew <- blsAPI(payload_punew)
+  json_punew <- fromJSON(response_punew)
+  punew_y[[as.character(y)]] <- apiDF(json_punew$Results$series[[1]]$data)
+}
+
+# join all years in all df
+df_punew <- bind_rows(punew_y)
+
+# test
+payload_punew <- list(
+  'seriesid'=c('CUSR0000SA0'),
+  'startyear'=2010,
+  'endyear'=2013)
+response_punew <- blsAPI(payload_punew)
+json_punew <- fromJSON(response_punew)
+teste <- apiDF(json_punew$Results$series[[1]]$data)
+
+
+rm(json_punew, payload_punew, response_punew)
+
 ## Fetch PUXHS
-puxhs_df <- read_csv("puxhs_1947-2023.csv")
+payload_puxhs <- list(
+  'seriesid'=c('CUSR0000SA0L2'),
+  'startyear'=1952,
+  'endyear'=2024)
+response_puxhs <- blsAPI(payload_puxhs)
+json_puxhs <- fromJSON(response_puxhs)
+df_puxhs <- apiDF(json_puxhs$Results$series[[1]]$data)
+
+rm(json_puxhs, payload_puxhs, response_puxhs)
+
 ## Fetch PUXX
-puxx_df <- read_csv("puxx_1957-2023.csv")
+payload_puxx <- list(
+  'seriesid'=c('CUSR0000SA0L1E'),
+  'startyear'=1958,
+  'endyear'=2024)
+response_puxx <- blsAPI(payload_puxx)
+json_puxx <- fromJSON(response_puxx)
+df_puxx <- apiDF(json_puxx$Results$series[[1]]$data)
+
+rm(json_puxx, payload_puxx, response_puxx)
 
 ## Fetch PCE
 # Specify the start and end dates for the data retrieval
-start_date <- as.Date("1959-01-01")
+start_date <- as.Date("1960-01-01")
 end_date <- as.Date("2023-12-31")
 
 # Fetch the data
@@ -31,9 +78,3 @@ getSymbols("PCEC", src = "FRED", from = start_date, to = end_date)
 df_pce <- as.data.frame(get("PCEC"))
 
 rm(end_date, start_date, PCEC)
-
-# Define the quartely inflation rate column 
-
-punew_df_test <- punew_df %>%
-  
-  
