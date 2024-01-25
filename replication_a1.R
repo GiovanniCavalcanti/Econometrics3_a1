@@ -33,7 +33,7 @@ process_inflation_data <- function(file_path, inflation_label, period_column = "
 }
 
 # Process each dataset
-punew_df <- process_inflation_data("punew_1947-2023.csv", "inflation_punew")
+punew_df <- process_inflation_data("data/punew_1947-2023.csv", "inflation_punew")
 puxhs_df <- process_inflation_data("puxhs_1947-2023.csv", "inflation_puxhs")
 puxx_df <- process_inflation_data("puxx_1957-2023.csv", "inflation_puxx")
 
