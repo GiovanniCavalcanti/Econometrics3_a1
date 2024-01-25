@@ -1,80 +1,96 @@
-# 01 Packages and envirnment -----------------------
+# 01 Packages and environment -----------------------
 
 rm(list = ls()) 
 
-# to install the Bureau of Labor Statistics API
-library(devtools)
-install_github("mikeasilva/blsAPI")
-
 library(tidyverse)
 library(dplyr)
-library(blsAPI)
-library(rjson)
 library(quantmod)
+library(forecast)
+library(lubridate)
+library(gt)
 
-# 02 Fetch inflation data -----------------------
+# 02 Load and adjust inflation data -----------------------
 
-
-
-## Fetch PUNEW
-punew_y <- list()
-# loop by year
-for (y in 1947:2023) {
-  payload_punew <- list(
-    'seriesid'=c('CUSR0000SA0'),
-    'startyear'=y,
-    'endyear'=y)
-  response_punew <- blsAPI(payload_punew)
-  json_punew <- fromJSON(response_punew)
-  punew_y[[as.character(y)]] <- apiDF(json_punew$Results$series[[1]]$data)
+process_inflation_data <- function(file_path, inflation_label, period_column = "Period", label_column = "Label", value_column = "Value") {
+  df <- read_csv(file_path) %>%
+    select(Period = period_column, Label = label_column, P = value_column) %>%
+    filter(Period %in% c("M01", "M04", "M07", "M10")) %>%
+    mutate(
+      P_lag = lag(P), # Create a lagged version of the price column
+      !!inflation_label := log(P / P_lag) # Dynamically name the inflation column
+    ) %>%
+    na.omit() %>%
+    mutate(DATE = dmy(paste("01", substr(Period, 2, 3), substr(Label, 1, 4), sep = "-"))) %>%
+    select(DATE, P, P_lag, !!inflation_label)
 }
 
-# join all years in all df
-df_punew <- bind_rows(punew_y)
+# Process each dataset
+punew_df <- process_inflation_data("punew_1947-2023.csv", "inflation_punew")
+puxhs_df <- process_inflation_data("puxhs_1947-2023.csv", "inflation_puxhs")
+puxx_df <- process_inflation_data("puxx_1957-2023.csv", "inflation_puxx")
 
-# test
-payload_punew <- list(
-  'seriesid'=c('CUSR0000SA0'),
-  'startyear'=2010,
-  'endyear'=2013)
-response_punew <- blsAPI(payload_punew)
-json_punew <- fromJSON(response_punew)
-teste <- apiDF(json_punew$Results$series[[1]]$data)
+rm(process_inflation_data)
 
+# For pce_df, adjust since it doesn't follow the same pattern for period and label columns
+pce_df <- read_csv("pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
+  rename(P = "DPCERD3Q086SBEA") %>%
+  mutate(
+    P_lag = lag(P),
+    inflation_pce = log(P / P_lag)
+  ) %>%
+  na.omit()
 
-rm(json_punew, payload_punew, response_punew)
+# Merge all dataframes on the DATE column
+merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "DATE") %>%
+  select("DATE", contains("inflation"))
+# write.csv(merged_df, file = "inflation_panel.csv")
 
-## Fetch PUXHS
-payload_puxhs <- list(
-  'seriesid'=c('CUSR0000SA0L2'),
-  'startyear'=1952,
-  'endyear'=2024)
-response_puxhs <- blsAPI(payload_puxhs)
-json_puxhs <- fromJSON(response_puxhs)
-df_puxhs <- apiDF(json_puxhs$Results$series[[1]]$data)
+rm(pce_df, punew_df, puxhs_df, puxx_df)
+## 02.1 Recreate table 1 Summary Statistics - original --------------------------
 
-rm(json_puxhs, payload_puxhs, response_puxhs)
+# Filter the data based on the specified date ranges for each series
+punew_puxhs_filter <- filter(merged_df, DATE >= as.Date("1952-04-01") & DATE <= as.Date("2003-01-01")) %>%
+  select("DATE", "inflation_punew", "inflation_puxhs")
+puxx_filter <- filter(merged_df, DATE >= as.Date("1958-04-01") & DATE <= as.Date("2003-01-01")) %>%
+  select("DATE", "inflation_puxx")
+pce_filter <- filter(merged_df, DATE >= as.Date("1960-04-01") & DATE <= as.Date("2003-01-01")) %>%
+  select("DATE", "inflation_pce")
 
-## Fetch PUXX
-payload_puxx <- list(
-  'seriesid'=c('CUSR0000SA0L1E'),
-  'startyear'=1958,
-  'endyear'=2024)
-response_puxx <- blsAPI(payload_puxx)
-json_puxx <- fromJSON(response_puxx)
-df_puxx <- apiDF(json_puxx$Results$series[[1]]$data)
+# Join the first two dataframes
+joined_df <- full_join(punew_puxhs_filter, puxx_filter, by = "DATE")
 
-rm(json_puxx, payload_puxx, response_puxx)
+# Now join the third dataframe with the result of the first join
+original_df <- full_join(joined_df, pce_filter, by = "DATE") %>%
+  mutate(sequence = row_number()) %>%
+  mutate(group = 1951+(sequence - 1) %/% 4 + 1) %>%
+  select(!"sequence") 
 
-## Fetch PCE
-# Specify the start and end dates for the data retrieval
-start_date <- as.Date("1960-01-01")
-end_date <- as.Date("2023-12-31")
+punew_year <- original_df %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- original_df %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- original_df %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- original_df %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
-# Fetch the data
-getSymbols("PCEC", src = "FRED", from = start_date, to = end_date)
+rm(joined_df, pce_filter, punew_puxhs_filter, puxx_filter)
 
-# Access the data
-df_pce <- as.data.frame(get("PCEC"))
+# Now join the third dataframe with the result of the first join
 
-rm(end_date, start_date, PCEC)
+original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") 
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+# Calculate the mean, standard deviation for each series
+summary_stats <- original_year_df %>%
+  summarise(across(c(punew_year, puxhs_year, puxx_year, pce_year), list(
+    mean = ~mean(.x, na.rm = TRUE),
+    sd = ~sd(.x, na.rm = TRUE)
+  )))
