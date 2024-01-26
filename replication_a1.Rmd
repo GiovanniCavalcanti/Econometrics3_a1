@@ -1,0 +1,243 @@
+---
+title: "Replication Econometrics III -- A1"
+author: "Calebe Piacentini and Giovanni"
+date: "2024-01-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+setwd('C:/Users/caleb/OneDrive - Universidade Federal de Minas Gerais/faculdade/insper/2023/econometrics/III/replication')
+
+library(tidyverse)
+library(dplyr)
+library(quantmod)
+library(forecast)
+library(lubridate)
+library(gt)
+```
+
+## What do we need to replicate?
+
+As exposed in the guidelines, we need to replicate all tables and figures **except** for the parts involving models RGM, VAR, RGMVAR, MDL1 and MDL2.
+
+Altering table 2 from the paper to exclude these models, we have:
+
+```{r models}
+# Create the data frame
+models_table <- data.frame(
+ Description = c(
+  "Time-series models", # 1
+  "", # 2
+  "", # 3
+  "", # 4
+  "Phillips curve (OLS)", # 5
+  "", # 6
+  "", # 7
+  "", # 8
+  "", # 9
+  "", # 10
+  "", # 11
+  "", # 12
+  "", # 13
+  "", # 14
+  "OLS term structure models", # 15
+  "", # 16
+  "", # 17
+  "", # 18
+  "", # 19
+  "", # 20
+  "", # 21
+  "", # 22
+  "", # 23
+  "", # 24
+  "", # 25
+  "Inflation surveys", # 26
+  "", # 27
+  "", # 28
+  "", # 29
+  "", # 30
+  "", # 31
+  "", # 32
+  "", # 33
+  "" # 34
+ ),
+ Abbreviation = c(
+  "ARMA", # 1
+  "AR", # 2
+  "RW", # 3
+  "AORW", # 4
+  "PC1", # 5
+  "PC2", # 6
+  "PC3", # 7
+  "PC4", # 8
+  "PC5", # 9
+  "PC6", # 10
+  "PC7", # 11
+  "PC8", # 12
+  "PC9", # 13
+  "PC10", # 14
+  "TS1", # 15
+  "TS2", # 16
+  "TS3", # 17
+  "TS4", # 18
+  "TS5", # 19
+  "TS6", # 20
+  "TS7", # 21
+  "TS8", # 22
+  "TS9", # 23
+  "TS10", # 24
+  "TS11", # 25
+  "SPF1", # 26
+  "SPF2", # 27
+  "SPF3", # 28
+  "LIV1", # 29
+  "LIV2", # 30
+  "LIV3", # 31
+  "MICH1", # 32
+  "MICH2", # 33
+  "MICH3" # 34
+ ),
+ Specification = c(
+  "ARMA(1,1)", # 1
+  "Autoregressive model", # 2
+  "Random walk on quarterly inflation", # 3
+  "Random walk on annual inflation", # 4
+  "INFL + GDPG", # 5
+  "INFL + GAP1", # 6
+  "INFL + GAP2", # 7
+  "INFL + LSHR", # 8
+  "INFL + UNEMP", # 9
+  "INFL + XLI", # 10
+  "INFL + XLI-2", # 11
+  "INFL + FAC", # 12
+  "INFL + GAP1 + LSHR", # 13
+  "INFL + GAP2 + LSHR", # 14
+  "INFL + GDPG + RATETS", # 15
+  "INFL + GAP1 + RATETS", # 16
+  "INFL + GAP2 + RATETS", # 17
+  "INFL + LSHR + RATETS", # 18
+  "INFL + UNEMP + RATETS", # 19
+  "INFL + XLI + RATETS", # 20
+  "INFL + XLI-2 + RATETS", # 21
+  "INFL + FAC + RATETS", # 22
+  "INFL + SPDTS", # 23
+  "INFL + RATE + SPDTS", # 24
+  "INFL + GDPG + RATE + SPDT", # 25
+  "VAR(1) on RATE, SPD, INFL, GDPG", # 26
+  "Linear bias-corrected SPF", # 27
+  "Non-linear bias-corrected SPFLIV1", # 28
+  "Livingston survey", # 29
+  "Linear bias-corrected Livingston", # 30
+  "Non-linear bias-corrected Livingston", # 31
+  "Michigan survey", # 32
+  "Linear bias-corrected Michigan", # 33
+  "Non-linear bias-corrected Michigan" # 34
+ )
+)
+
+knitr::kable(models_table)
+```
+
+
+## Loading Data
+
+
+```{r load_data}
+
+process_inflation_data <- function(file_path, inflation_label, period_column = "Period", label_column = "Label", value_column = "Value") {
+  df <- read_csv(file_path) %>%
+    select(Period = period_column, Label = label_column, P = value_column) %>%
+    mutate(
+      DATE = dmy(paste("01", substr(Period, 2, 3), substr(Label, 1, 4), sep = "-")), # Generate DATE column early to use for arrangement
+      P_lag = lag(P, n =2), # Create a lagged version of the price column
+      !!inflation_label := log(P / P_lag) # Dynamically name the inflation column
+    ) %>%
+    na.omit() %>%
+    arrange(DATE) %>%
+    mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
+    group_by(Quarter) %>%
+    summarise(
+      LastDate = last(DATE),
+      LastP = last(P),
+      LastP_lag = last(P_lag),
+      !!inflation_label := last(!!sym(inflation_label))
+    ) %>%
+    select(Quarter, LastDate, LastP, LastP_lag, !!inflation_label)
+}
+
+# Process each dataset
+punew_df <- process_inflation_data("data/punew_1947-2023.csv", "inflation_punew")
+puxhs_df <- process_inflation_data("data/puxhs_1947-2023.csv", "inflation_puxhs")
+puxx_df <- process_inflation_data("data/puxx_1957-2023.csv", "inflation_puxx")
+
+pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
+  rename(P = "DPCERD3Q086SBEA") %>%
+  mutate(
+    P_lag = lag(P),
+    inflation_pce = log(P / P_lag),
+    LastDate = DATE %m-% months(1) # Subtract 3 months directly here
+  )
+
+# Merge all dataframes on the DATE column
+merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "LastDate") %>%
+  select("LastDate", contains("inflation")) %>%
+  mutate(quarter = paste(year(LastDate), quarter(LastDate), sep = "-Q")) 
+
+```
+
+## Summary statistics
+
+Here we replicate table [...] from the paper.
+
+```{r summary_statistics}
+# Filter the data based on the specified date ranges for each series
+punew_puxhs_filter <- filter(merged_df, LastDate >= as.Date("1952-04-01") & LastDate <= as.Date("2003-01-01")) %>%
+  select("LastDate", "inflation_punew", "inflation_puxhs", "quarter")
+puxx_filter <- filter(merged_df, LastDate >= as.Date("1958-04-01") & LastDate <= as.Date("2003-01-01")) %>%
+  select("LastDate", "inflation_puxx", "quarter")
+pce_filter <- filter(merged_df, LastDate >= as.Date("1960-04-01") & LastDate <= as.Date("2003-01-01")) %>%
+  select("LastDate", "inflation_pce", "quarter")
+
+# Join the first two dataframes
+joined_df <- full_join(punew_puxhs_filter, puxx_filter, by = "LastDate")
+
+# Now join the third dataframe with the result of the first join
+original_df <- full_join(joined_df, pce_filter, by = "LastDate") %>%
+  mutate(sequence = row_number()) %>%
+  mutate(group = 1951+(sequence - 1) %/% 4 + 1) %>%
+  select("LastDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
+
+punew_year <- original_df %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- original_df %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- original_df %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- original_df %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+rm(joined_df, pce_filter, punew_puxhs_filter, puxx_filter)
+
+original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+# Calculate the mean, standard deviation for each series
+summary_stats <- original_year_df %>%
+  summarise(across(c(punew_year, puxhs_year, puxx_year, pce_year), list(
+    mean = ~mean(.x, na.rm = TRUE),
+    sd = ~sd(.x, na.rm = TRUE)
+  )))
+
+```
+
+
