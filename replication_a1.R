@@ -243,3 +243,41 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
   pack_rows("Correlations", 4, 6)
 
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+rm(original_df_B, original_df_C, original_year_df_B, original_year_df_C, statistics_labels)
+## 0.2.2 Recreate figure 1.A -----------------------------
+
+# Multiply the inflation columns by 100
+data_plot1A <- original_df %>%
+  mutate(across(starts_with("inflation"), ~ .x * 100))
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = starts_with("inflation"), names_to = "inflation_type", values_to = "inflation_value")
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash")
+shapes <- c(NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_x_date(date_breaks = "5 years", date_labels = "%Y") 
+
+ggsave("inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
+
+
+
