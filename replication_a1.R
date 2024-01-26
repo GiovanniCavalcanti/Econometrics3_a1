@@ -1,7 +1,9 @@
 # 01 Packages and environment -----------------------
 
+# Limpar o ambiente de trabalho
 rm(list = ls()) 
 
+# Carreggar pacotes necessários
 library(tidyverse)
 library(dplyr)
 library(quantmod)
@@ -13,6 +15,10 @@ library(knitr)
 library(kableExtra)
 
 # 02 Load and adjust inflation data -----------------------
+
+# function to process inflation data
+# file_path = file_path, ex: "~/data/punew_1947-2023.csv"
+# inflation_label = series_name, ex: "inflation_punew"
 
 process_inflation_data <- function(file_path, inflation_label, period_column = "Period", label_column = "Label", value_column = "Value") {
   df <- read_csv(file_path) %>%
@@ -53,59 +59,117 @@ pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
 
 
 # Merge all dataframes on the DATE column
-merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
+df_inflation_complete <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
   select("FirstDate", contains("inflation")) %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q")) 
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q")) %>%
+  mutate(group = year(FirstDate))
 
-# write.csv(merged_df, file = "inflation_panel.csv")
+##___________________________________________________________________##
+#   Save the df_inflation_complete as idf_inflation_complete.csv.     #
+#   This is the the complete inflation panel!                         #  
+##___________________________________________________________________##
+# write.csv(df_inflation_complete, file = "df_inflation_complete.csv")
 
 rm(pce_df, punew_df, puxhs_df, puxx_df)
 
-## 02.1 Recreate table 1 Summary Statistics - original --------------------------
+# Now, we agregate inflation by year.
 
-### Filter the data based on the specified date ranges for each series ----------
-punew_puxhs_filter <- filter(merged_df, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+punew_year <- df_inflation_complete %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_complete %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_complete %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_complete %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_complete_yearly <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+##____________________________________________________________________________##
+#   df_inflation_complete_yearly is the yearly aggregated inflation     
+#   This is the complete yearly inflation panel  
+##____________________________________________________________________________##
+# write.csv(df_inflation_complete_yearly, file = "df_inflation_complete_yearly.csv")
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+## 02.0 Recreate Authors' inflation panel -------------------------------------------
+
+##______________________________________________________________________________##
+# To recreate Authors' inflation panel, it requires to filter the dates accordingly
+# Their sample period is:
+#- 1952:Q2–2002:Q4 for PUNEW and PUXHS,
+#- 1958:Q2–2002:Q4 for PUXX,
+#- 1960:Q2–2002:Q4 for PCE
+##______________________________________________________________________________##
+
+# Filter the data based on the specified date ranges for each series
+punew_puxhs_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
   select("FirstDate", "inflation_punew", "inflation_puxhs", "quarter")
-puxx_filter <- filter(merged_df, FirstDate >= as.Date("1958-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+puxx_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1958-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
   select("FirstDate", "inflation_puxx", "quarter")
-pce_filter <- filter(merged_df, FirstDate >= as.Date("1960-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+pce_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1960-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
   select("FirstDate", "inflation_pce", "quarter")
 
-# Join the dataframes
-original_df <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
+# Now, join those dataframes
+df_inflation_authors <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
   full_join(., pce_filter, by = "FirstDate")  %>%
   mutate(group = year(FirstDate)) %>%
   select("FirstDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
 
-punew_year <- original_df %>%
+##____________________________________________________________________________##
+#   Save the df_inflation_authors as original_inflation_panel.csv.  
+#   This is the the authors' original inflation panel        
+##____________________________________________________________________________##
+# write.csv(df_inflation_authors, file = "df_inflation_authors.csv")
+
+# Now, we agregate inflation by year.
+
+punew_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df %>%
+puxhs_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df %>%
+puxx_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df %>%
+pce_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
-rm(joined_df, pce_filter, punew_puxhs_filter, puxx_filter)
+rm(pce_filter, punew_puxhs_filter, puxx_filter)
 
-original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
+df_inflation_authors_yearly <- full_join(punew_year, puxhs_year, by = "group") %>%
   full_join(., puxx_year, by = "group") %>%
   full_join(., pce_year, by = "group") %>%
   mutate(across(everything(), ~na_if(.x, 0)))
-  
+
+##____________________________________________________________________________##
+#   df_inflation_authors_yearly is the yearly aggregated inflation     
+#   This is the the authors' original yearly inflation panel  
+##____________________________________________________________________________##
+# write.csv(df_inflation_authors_yearly, file = "df_inflation_authors_yearly.csv")
+
 rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+## 02.1 Recreate table 1 Summary Statistics - original --------------------------
 
 ### Panel A --------------------------------------------------
 
-data_variables <- select(original_year_df, ends_with('year'))
+data_variables <- select(df_inflation_authors_yearly, ends_with('year'))
 
+# Calculate summary statistics
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df %>% 
+autocorrelation_quaterly <- df_inflation_authors %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -136,34 +200,34 @@ rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
 ### Panel B -----------------------------------------------
 
-original_df_B <- original_df %>%
+df_inflation_authors_B <- df_inflation_authors %>%
   filter(FirstDate >= "1986-01-01" & FirstDate <= "2002-10-01")
 
-punew_year <- original_df_B %>%
+punew_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df_B %>%
+puxhs_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df_B %>%
+puxx_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df_B %>%
+pce_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
-original_year_df_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+df_inflation_authors_yearly_B <- full_join(punew_year, puxhs_year, by = "group") %>%
   full_join(., puxx_year, by = "group") %>%
   full_join(., pce_year, by = "group") %>%
   mutate(across(everything(), ~na_if(.x, 0)))
 
 rm(pce_year, punew_year, puxhs_year, puxx_year)
 
-data_variables <- select(original_year_df_B, ends_with('year'))
+data_variables <- select(df_inflation_authors_yearly_B, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df_B %>% 
+autocorrelation_quaterly <- df_inflation_authors_B %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -178,7 +242,7 @@ panel_b <- panel_b %>%
   select(Statistic, everything()) %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
-# Generate the table 1, panel A (latex code)
+# Generate the table 1, panel B (latex code)
 kable(panel_b, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
@@ -191,34 +255,34 @@ rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
 ### Panel C -----------------------------------------------
 
-original_df_C <- original_df %>%
+df_inflation_authors_C <- df_inflation_authors %>%
   filter(FirstDate >= "1996-01-01" & FirstDate <= "2002-10-01")
 
-punew_year <- original_df_C %>%
+punew_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df_C %>%
+puxhs_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df_C %>%
+puxx_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df_C %>%
+pce_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
-original_year_df_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+df_inflation_authors_yearly_C <- full_join(punew_year, puxhs_year, by = "group") %>%
   full_join(., puxx_year, by = "group") %>%
   full_join(., pce_year, by = "group") %>%
   mutate(across(everything(), ~na_if(.x, 0)))
 
 rm(pce_year, punew_year, puxhs_year, puxx_year)
 
-data_variables <- select(original_year_df_C, ends_with('year'))
+data_variables <- select(df_inflation_authors_yearly_C, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df_C %>% 
+autocorrelation_quaterly <- df_inflation_authors_C %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -233,7 +297,7 @@ panel_c <- panel_c %>%
   select(Statistic, everything()) %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
-# Generate the table 1, panel A (latex code)
+# Generate the table 1, panel C (latex code)
 kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
@@ -242,13 +306,15 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
 
-rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
-rm(original_df_B, original_df_C, original_year_df_B, original_year_df_C, statistics_labels)
+# Clear environmnent
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
+
 ## 0.2.2 Recreate figure 1.A -----------------------------
 
 # Multiply the inflation columns by 100
-data_plot1A <- original_df %>%
+data_plot1A <- df_inflation_authors %>%
   mutate(across(starts_with("inflation"), ~ .x * 100))
 
 # Pivot the data to a long format for plotting with ggplot2
