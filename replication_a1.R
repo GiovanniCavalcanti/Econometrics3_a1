@@ -63,7 +63,7 @@ rm(pce_df, punew_df, puxhs_df, puxx_df)
 
 ## 02.1 Recreate table 1 Summary Statistics - original --------------------------
 
-# Filter the data based on the specified date ranges for each series
+### Filter the data based on the specified date ranges for each series ----------
 punew_puxhs_filter <- filter(merged_df, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
   select("FirstDate", "inflation_punew", "inflation_puxhs", "quarter")
 puxx_filter <- filter(merged_df, FirstDate >= as.Date("1958-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
@@ -99,6 +99,8 @@ original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
   
 rm(pce_year, punew_year, puxhs_year, puxx_year)
 
+### Panel A --------------------------------------------------
+
 data_variables <- select(original_year_df, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
@@ -121,7 +123,7 @@ panel_a <- panel_a %>%
   select(Statistic, everything()) %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
-# Generate the table (latex code)
+# Generate the table 1, panel A (latex code)
 kable(panel_a, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
@@ -129,3 +131,115 @@ kable(panel_a, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
   pack_rows("Standard deviation", 2, 2) %>%
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
+
+rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel B -----------------------------------------------
+
+original_df_B <- original_df %>%
+  filter(FirstDate >= "1986-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- original_df_B %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- original_df_B %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- original_df_B %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- original_df_B %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+original_year_df_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(original_year_df_B, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- original_df_B %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_b <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_b <- panel_b %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+kable(panel_b, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel C -----------------------------------------------
+
+original_df_C <- original_df %>%
+  filter(FirstDate >= "1996-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- original_df_C %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- original_df_C %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- original_df_C %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- original_df_C %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+original_year_df_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(original_year_df_C, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- original_df_C %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_c <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_c <- panel_c %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
