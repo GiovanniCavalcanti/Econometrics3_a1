@@ -16,7 +16,7 @@ process_inflation_data <- function(file_path, inflation_label, period_column = "
     select(Period = period_column, Label = label_column, P = value_column) %>%
     mutate(
       DATE = dmy(paste("01", substr(Period, 2, 3), substr(Label, 1, 4), sep = "-")), # Generate DATE column early to use for arrangement
-      P_lag = lag(P, n =2), # Create a lagged version of the price column
+      P_lag = lag(P, n =3), # Create a lagged version of the price column
       !!inflation_label := log(P / P_lag) # Dynamically name the inflation column
     ) %>%
     na.omit() %>%
@@ -24,12 +24,12 @@ process_inflation_data <- function(file_path, inflation_label, period_column = "
     mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
     group_by(Quarter) %>%
     summarise(
-      LastDate = last(DATE),
-      LastP = last(P),
-      LastP_lag = last(P_lag),
-      !!inflation_label := last(!!sym(inflation_label))
+      FirstDate = first(DATE),
+      FirstP = first(P),
+      FirstP_lag = first(P_lag),
+      !!inflation_label := first(!!sym(inflation_label))
     ) %>%
-    select(Quarter, LastDate, LastP, LastP_lag, !!inflation_label)
+    select(Quarter, FirstDate, FirstP, FirstP_lag, !!inflation_label)
 }
 
 # Process each dataset
@@ -44,14 +44,15 @@ pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
   mutate(
     P_lag = lag(P),
     inflation_pce = log(P / P_lag),
-    LastDate = DATE %m-% months(1) # Subtract 3 months directly here
-  )
+    FirstDate = DATE
+  ) %>%
+  na.omit()
 
 
 # Merge all dataframes on the DATE column
-merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "LastDate") %>%
-  select("LastDate", contains("inflation")) %>%
-  mutate(quarter = paste(year(LastDate), quarter(LastDate), sep = "-Q")) 
+merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
+  select("FirstDate", contains("inflation")) %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q")) 
 
 # write.csv(merged_df, file = "inflation_panel.csv")
 
@@ -60,18 +61,18 @@ rm(pce_df, punew_df, puxhs_df, puxx_df)
 ## 02.1 Recreate table 1 Summary Statistics - original --------------------------
 
 # Filter the data based on the specified date ranges for each series
-punew_puxhs_filter <- filter(merged_df, LastDate >= as.Date("1952-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_punew", "inflation_puxhs", "quarter")
-puxx_filter <- filter(merged_df, LastDate >= as.Date("1958-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_puxx", "quarter")
-pce_filter <- filter(merged_df, LastDate >= as.Date("1960-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_pce", "quarter")
+punew_puxhs_filter <- filter(merged_df, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_punew", "inflation_puxhs", "quarter")
+puxx_filter <- filter(merged_df, FirstDate >= as.Date("1958-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_puxx", "quarter")
+pce_filter <- filter(merged_df, FirstDate >= as.Date("1960-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_pce", "quarter")
 
-# Join the first two dataframes
-original_df <- full_join(punew_puxhs_filter, puxx_filter, by = "LastDate") %>%
-  full_join(., pce_filter, by = "LastDate")  %>%
-  mutate(group = year(LastDate)) %>%
-  select("LastDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
+# Join the dataframes
+original_df <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
+  full_join(., pce_filter, by = "FirstDate")  %>%
+  mutate(group = year(FirstDate)) %>%
+  select("FirstDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
 
 punew_year <- original_df %>%
   group_by(group) %>%
