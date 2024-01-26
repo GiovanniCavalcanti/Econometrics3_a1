@@ -8,6 +8,9 @@ library(quantmod)
 library(forecast)
 library(lubridate)
 library(gt)
+library(tibble)
+library(knitr)
+library(kableExtra)
 
 # 02 Load and adjust inflation data -----------------------
 
@@ -96,11 +99,33 @@ original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
   
 rm(pce_year, punew_year, puxhs_year, puxx_year)
 
+data_variables <- select(original_year_df, ends_with('year'))
 
-summary_stats <- original_year_df %>%
-  summarise(across(c(punew_year, puxhs_year, puxx_year, pce_year), list(
-    mean = ~mean(.x, na.rm = TRUE),
-    sd = ~sd(.x, na.rm = TRUE),
-    se = ~sd(.x, na.rm = TRUE) / sqrt(sum(!is.na(.x))) # Standard Error of the mean
-  )))
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- original_df %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
 
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+  
+# New column to add at the start
+statistics_labels <- c("Mean", "Standard deviation", "Autocorrelation", "Correlations", "PUXHS", "PUXX", "PCE")
+
+# Adding the new column at the start of the dataframe
+panel_a <- panel_a %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table (latex code)
+kable(panel_a, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
