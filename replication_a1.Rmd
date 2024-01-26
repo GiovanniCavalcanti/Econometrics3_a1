@@ -146,44 +146,47 @@ knitr::kable(models_table)
 
 ```{r load_data}
 
-process_inflation_data <- function(file_path, inflation_label, period_column = "Period", label_column = "Label", value_column = "Value") {
+process_inflation_data <- function(file_path, var_label) {
   df <- read_csv(file_path) %>%
-    select(Period = period_column, Label = label_column, P = value_column) %>%
-    mutate(
-      DATE = dmy(paste("01", substr(Period, 2, 3), substr(Label, 1, 4), sep = "-")), # Generate DATE column early to use for arrangement
-      P_lag = lag(P, n =2), # Create a lagged version of the price column
-      !!inflation_label := log(P / P_lag) # Dynamically name the inflation column
-    ) %>%
-    na.omit() %>%
-    arrange(DATE) %>%
-    mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
-    group_by(Quarter) %>%
-    summarise(
-      LastDate = last(DATE),
-      LastP = last(P),
-      LastP_lag = last(P_lag),
-      !!inflation_label := last(!!sym(inflation_label))
-    ) %>%
-    select(Quarter, LastDate, LastP, LastP_lag, !!inflation_label)
+    select(year = Year, value = Value) %>%
+    group_by(year) %>% 
+    mutate(month = rep(1:12), quarter = rep(1:4, each = 3)) %>% 
+    ungroup() %>% 
+    mutate(variable = var_label) %>% 
+    select(variable, year, quarter, month, value) %>% 
+    arrange(variable, year, month)
+  
+  return(df)
 }
 
 # Process each dataset
-punew_df <- process_inflation_data("data/punew_1947-2023.csv", "inflation_punew")
-puxhs_df <- process_inflation_data("data/puxhs_1947-2023.csv", "inflation_puxhs")
-puxx_df <- process_inflation_data("data/puxx_1957-2023.csv", "inflation_puxx")
-
+punew_df <- process_inflation_data("data/punew_1947-2023.csv", 'punew')
+puxhs_df <- process_inflation_data("data/puxhs_1947-2023.csv", "puxhs")
+puxx_df <- process_inflation_data("data/puxx_1957-2023.csv", "puxx")
+#
 pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
-  rename(P = "DPCERD3Q086SBEA") %>%
-  mutate(
-    P_lag = lag(P),
-    inflation_pce = log(P / P_lag),
-    LastDate = DATE %m-% months(1) # Subtract 3 months directly here
-  )
+  rename(value = "DPCERD3Q086SBEA") %>% 
+  mutate(variable = "pce",
+         year = year(DATE)) %>% 
+  filter(year!=2023) %>% 
+  group_by(year) %>% 
+  mutate(quarter=rep(1:4)) %>% 
+  ungroup() %>% 
+  select(variable, year, quarter, value) %>% 
+  pivot_wider()
 
-# Merge all dataframes on the DATE column
-merged_df <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "LastDate") %>%
-  select("LastDate", contains("inflation")) %>%
-  mutate(quarter = paste(year(LastDate), quarter(LastDate), sep = "-Q")) 
+# join all inflation data 
+# group data by quarters
+# join with pce data
+# make it wide
+merged_df <- bind_rows(list(punew_df, puxhs_df, puxx_df)) %>%
+  group_by(variable, year, quarter) %>% 
+  summarise(across(everything(), ~ mean(., na.rm=T))) %>% 
+  bind_rows(pce_df) %>% 
+  pivot_wider(names_from = variable, values_from = value) %>% 
+  select(-month)
+
+print(merged_df)
 
 ```
 
