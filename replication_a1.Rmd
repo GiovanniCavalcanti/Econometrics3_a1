@@ -143,6 +143,7 @@ knitr::kable(models_table)
 
 ## Loading Data
 
+Data from the paper.
 
 ```{r load_data}
 
@@ -181,65 +182,65 @@ pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
 # make it wide
 merged_df <- bind_rows(list(punew_df, puxhs_df, puxx_df)) %>%
   group_by(variable, year, quarter) %>% 
-  summarise(across(everything(), ~ mean(., na.rm=T))) %>% 
+  summarise(across(everything(), last)) %>% 
+  ungroup() %>% 
   bind_rows(pce_df) %>% 
-  pivot_wider(names_from = variable, values_from = value) %>% 
-  select(-month)
+  select(-month) %>% 
+  pivot_wider(names_from = variable, values_from = value)
+  
+# calculating the inflation
+df_inflation <- merged_df %>% 
+  mutate(across(punew:pce, ~ log(./lag(.)), .names = 'inflation_{col}'))
 
 print(merged_df)
 
 ```
 
+And now data from Brazil.
+
 ## Summary statistics
 
-Here we replicate table [...] from the paper.
+Here we replicate table 1 of Summary Statistics from the paper.
+
+First, we do it for the exactly the period of their analysis. It's worth noting that although their first year of analysis is 1952, PUXX only starts to have data at 1957 (even though they use data starting from 1958).
 
 ```{r summary_statistics}
-# Filter the data based on the specified date ranges for each series
-punew_puxhs_filter <- filter(merged_df, LastDate >= as.Date("1952-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_punew", "inflation_puxhs", "quarter")
-puxx_filter <- filter(merged_df, LastDate >= as.Date("1958-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_puxx", "quarter")
-pce_filter <- filter(merged_df, LastDate >= as.Date("1960-04-01") & LastDate <= as.Date("2003-01-01")) %>%
-  select("LastDate", "inflation_pce", "quarter")
+# define the periods
+year_start <- c(1952, 1986, 1996)
+quarter_start <- c(1, 2, 2)
+year_end <- 2002
 
-# Join the first two dataframes
-joined_df <- full_join(punew_puxhs_filter, puxx_filter, by = "LastDate")
+# todo: loop this then join all three panels into one latex
+# one possibility is to add this in the function below
+data_subset <- df_inflation %>% 
+      filter(year >= 1952, quarter >= 1) %>% 
+      filter(year <= 2002)
 
-# Now join the third dataframe with the result of the first join
-original_df <- full_join(joined_df, pce_filter, by = "LastDate") %>%
-  mutate(sequence = row_number()) %>%
-  mutate(group = 1951+(sequence - 1) %/% 4 + 1) %>%
-  select("LastDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
+data_variables <- select(data_subset, starts_with('inflation'))
 
-punew_year <- original_df %>%
-  group_by(group) %>%
-  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df %>%
-  group_by(group) %>%
-  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df %>%
-  group_by(group) %>%
-  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df %>%
-  group_by(group) %>%
-  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+means <- round(colMeans(data_variables, na.rm = T),2)
+sds <- data_variables %>% summarise(across(everything(), ~ sd(., na.rm=T)))
+autocorrelation_quaterly <- data_variables %>% summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs')))
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
 
-rm(joined_df, pce_filter, punew_puxhs_filter, puxx_filter)
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
 
-original_year_df <- full_join(punew_year, puxhs_year, by = "group") %>%
-  full_join(., puxx_year, by = "group") %>%
-  full_join(., pce_year, by = "group") %>%
-  mutate(across(everything(), ~na_if(.x, 0)))
+panel_summary <- function(inflation_data, year_start, quarter_start, year_end){
+  data_subset <- inflation_data %>% 
+      filter(year >= year_start, quarter >= quarter_start) %>% 
+      filter(year <= year_end)
+    
+    means <- round(rowMeans(data_subset[, 3:ncol(data_subset)]), 2)
+}
 
-rm(pce_year, punew_year, puxhs_year, puxx_year)
-
-# Calculate the mean, standard deviation for each series
-summary_stats <- original_year_df %>%
-  summarise(across(c(punew_year, puxhs_year, puxx_year, pce_year), list(
-    mean = ~mean(.x, na.rm = TRUE),
-    sd = ~sd(.x, na.rm = TRUE)
-  )))
+# loop
+for (y_start in year_start) {
+  for (q_start in quarter_start) {
+    # filtering the data for each panel
+    
+  }
+}
 
 ```
 
