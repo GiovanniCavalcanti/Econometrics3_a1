@@ -351,6 +351,7 @@ plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, colo
 
 # 03 Load and adjust real activities measures ----------------------------------
 
+## gdpg dataframe
 df_gpd_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
   mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
@@ -361,6 +362,44 @@ df_gpd_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate", "gdpg", "quarter", "group") %>%
   na.omit()
 
+## gap1 dataframe ((quadratically) detrended log GDP as a measure of the output gap las period)
+df_gap1_complete <- read.csv("real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
+         gap1 = log(lag(gdp, n =1))^2,
+         group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  select("FirstDate", "gap1", "quarter", "group") %>%
+  na.omit()
+
+## gap2 dataframe
+
+library(hpfilter) # implements the modified filter for gap2
+
+gap2<- read.csv("real_measures_data/gdp.csv") %>%
+  select("gdp" = "GDPC1") 
+
+filter <- hp1(gap2, lambda = 1600)
+
+gap2 <- read.csv("real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1")
+
+gap2$gap_2 <- filter
+
+df_gap2_complete <- gap2 %>%
+  select("FirstDate" = as.character("FirstDate"), "gap2" = "gap_2") %>%
+  unnest(gap2) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         gap2 = gdp,
+         quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+         group = year(FirstDate)) %>%
+  select(!gdp)
+
+rm(gap2, filter)
+
+## li dataframe
+
+## unemployment  dataframe
 df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
   arrange(DATE) %>%
   mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
@@ -372,6 +411,7 @@ df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
          group = year(FirstDate)) %>%
   select("FirstDate", "unrate" = "UNRATE", "quarter" = "Quarter", "group")
 
+## labor share dataframe
 df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
   select("FirstDate" = "DATE", "lshr" = "PRS85006173") %>%
   mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
@@ -379,6 +419,7 @@ df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
          FirstDate = as.Date(FirstDate)) %>%
   select("FirstDate", "lshr", "quarter", "group")
 
+## join all dataframees
 df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
   full_join(., df_lshr_complete) %>%
   select("FirstDate", "gdpg", "unrate", "lshr", "quarter", "group")
