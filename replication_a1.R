@@ -58,21 +58,21 @@ pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
   na.omit()
 
 
-# Merge all dataframes on the DATE column
+# Merge all dataframes on the FirstDate column
 df_inflation_complete <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
   select("FirstDate", contains("inflation")) %>%
   mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q")) %>%
   mutate(group = year(FirstDate))
 
 ##___________________________________________________________________##
-#   Save the df_inflation_complete as idf_inflation_complete.csv.     #
-#   This is the the complete inflation panel!                         #  
+#   Save the df_inflation_complete as df_inflation_complete.csv.      
+#   This is the the complete inflation panel!                           
 ##___________________________________________________________________##
 # write.csv(df_inflation_complete, file = "df_inflation_complete.csv")
 
 rm(pce_df, punew_df, puxhs_df, puxx_df)
 
-# Now, we agregate inflation by year.
+# Now, we aggregate inflation by year.
 
 punew_year <- df_inflation_complete %>%
   group_by(group) %>%
@@ -307,7 +307,7 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
   pack_rows("Correlations", 4, 6)
 
 
-# Clear environmnent
+# Clear environment
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
 
@@ -343,7 +343,77 @@ plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, colo
         axis.text.x = element_text(angle = 45, hjust = 1)) +
   scale_x_date(date_breaks = "5 years", date_labels = "%Y") 
 
-ggsave("inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
+# ggsave("inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
+
+
+
+
+
+# 03 Load and adjust real activities measures ----------------------------------
+
+df_gpd_complete <- read.csv("real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
+         gdp_lag = lag(gdp, n =1), 
+         gdpg = log(gdp / gdp_lag), 
+         group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  select("FirstDate", "gdpg", "quarter", "group") %>%
+  na.omit()
+
+df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
+  arrange(DATE) %>%
+  mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
+  group_by(Quarter) %>%
+  summarise(
+    FirstDate = first(DATE),
+    UNRATE = first(UNRATE)) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         group = year(FirstDate)) %>%
+  select("FirstDate", "unrate" = "UNRATE", "quarter" = "Quarter", "group")
+
+df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
+  select("FirstDate" = "DATE", "lshr" = "PRS85006173") %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+         group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  select("FirstDate", "lshr", "quarter", "group")
+
+df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
+  full_join(., df_lshr_complete) %>%
+  select("FirstDate", "gdpg", "unrate", "lshr", "quarter", "group")
+
+##____________________________________________________________________________##
+#   df_realmeasures_complete is the quarterly real measures data    
+#   This is the complete quarterly real measures data 
+##____________________________________________________________________________##
+# write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
+
+rm(df_gpd_complete, df_unemp_complete, df_lshr_complete)
+
+## 0.3.0 Recreate Authors' Real measures panel
+
+##______________________________________________________________________________##
+# To recreate Authors' real measures panel, it requires to filter the dates accordingly
+# Their sample period is:
+#- 1952:Q2–2001:Q4 for all the real activity measures, except
+#- 1959:Q1–2001:Q3 for Bernanke–Boivin–Eliasz real activity factor
+##______________________________________________________________________________##
+
+df_realmeasures_authors <- filter(df_inflation_complete, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2001-10-01")) 
+
+##____________________________________________________________________________##
+#   df_realmeasures_authors is the quarterly real measures data    
+#   This is the Authors' quarterly real measures data 
+##____________________________________________________________________________##
+# write.csv(df_realmeasures_authors, file = "df_realmeasures_authors.csv")
+
+
+
+
+
+
+
 
 
 
