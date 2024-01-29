@@ -16,6 +16,9 @@ library(quantmod)
 library(forecast)
 library(lubridate)
 library(gt)
+library(tibble)
+library(knitr)
+library(kableExtra)
 ```
 
 ## What do we need to replicate?
@@ -217,21 +220,21 @@ pce_filter <- filter(merged_df, FirstDate >= as.Date("1960-04-01") & FirstDate <
   select("FirstDate", "inflation_pce", "quarter")
 
 # Join the dataframes
-original_df <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
+df_inflation_authors <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
   full_join(., pce_filter, by = "FirstDate")  %>%
   mutate(group = year(FirstDate)) %>%
   select("FirstDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
 
-punew_year <- original_df %>%
+punew_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df %>%
+puxhs_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df %>%
+puxx_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df %>%
+pce_year <- df_inflation_authors %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
@@ -262,7 +265,7 @@ data_variables <- select(original_year_df, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df %>% 
+autocorrelation_quaterly <- df_inflation_authors %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -293,19 +296,19 @@ rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
 ### Panel B -----------------------------------------------
 
-original_df_B <- original_df %>%
+df_inflation_authors_B <- df_inflation_authors %>%
   filter(FirstDate >= "1986-01-01" & FirstDate <= "2002-10-01")
 
-punew_year <- original_df_B %>%
+punew_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df_B %>%
+puxhs_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df_B %>%
+puxx_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df_B %>%
+pce_year <- df_inflation_authors_B %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
@@ -320,7 +323,7 @@ data_variables <- select(original_year_df_B, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df_B %>% 
+autocorrelation_quaterly <- df_inflation_authors_B %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -348,19 +351,19 @@ rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
 ### Panel C -----------------------------------------------
 
-original_df_C <- original_df %>%
+df_inflation_authors_C <- df_inflation_authors %>%
   filter(FirstDate >= "1996-01-01" & FirstDate <= "2002-10-01")
 
-punew_year <- original_df_C %>%
+punew_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- original_df_C %>%
+puxhs_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- original_df_C %>%
+puxx_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- original_df_C %>%
+pce_year <- df_inflation_authors_C %>%
   group_by(group) %>%
   summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
 
@@ -375,7 +378,7 @@ data_variables <- select(original_year_df_C, ends_with('year'))
 
 means <- 100*round(colMeans(data_variables, na.rm = T),4)
 sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
-autocorrelation_quaterly <- original_df_C %>% 
+autocorrelation_quaterly <- df_inflation_authors_C %>% 
   select(starts_with("inflation")) %>%
   summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
   select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
@@ -401,11 +404,11 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
 
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
-rm(original_df_B, original_df_C, original_year_df_B, original_year_df_C, statistics_labels)
+rm(df_inflation_authors_B, df_inflation_authors_C, original_year_df_B, original_year_df_C, statistics_labels)
 ## 0.2.2 Recreate figure 1.A -----------------------------
 
 # Multiply the inflation columns by 100
-data_plot1A <- original_df %>%
+data_plot1A <- df_inflation_authors %>%
   mutate(across(starts_with("inflation"), ~ .x * 100))
 
 # Pivot the data to a long format for plotting with ggplot2
@@ -438,4 +441,117 @@ ggsave("inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
 
 ```
 ## Estimating the models
+
+### Time-Series Models
+
+Here we'll estimate the ARMA, AR, RW and AORW.
+
+```{r time_series_models}
+# Function to perform rolling window forecasting with ARMA(1,1) over years
+rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4) {
+  # adding a forecast vector to store results
+  forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
+  
+  # loop for the rolling window
+  for (y in year(initial_end):year(final_date)) {
+    train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))  # Use data up to the current index for training
+    test_data <- data %>% filter(FirstDate > as.Date(str_c(y, '-12-01')))  # Use the next quarter for testing
+    
+    train_series <- train_data %>% select(series_name)
+    
+    # Fit ARMA(p,q) model
+    arma_model <- arima(train_series, order = c(order_ar, 0, order_ma))
+    
+    # Forecast for the next 4 quarters
+    forecast_result <- forecast(arma_model, h = 4)
+    
+    # Extract the forecasted values for the next 4 quarters
+    forecast_values <- as.numeric(forecast_result$mean)
+    
+    # Store the forecasted values
+    forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
+  }
+  
+  return(forecasts)
+}
+
+# todo: make necessary changes
+
+# very similar to the last function, 
+# with the difference that now we'll choose AR(p) recursively by SIC
+rolling_forecast_ar_p <- function(data, series_name, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4) {
+  # adding a forecast vector to store results
+  forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
+  
+  # loop for the rolling window
+  for (y in year(initial_end):year(final_date)) {
+    train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))  # Use data up to the current index for training
+    test_data <- data %>% filter(FirstDate > as.Date(str_c(y, '-12-01')))  # Use the next quarter for testing
+    
+    train_series <- train_data %>% select(series_name)
+    
+    # Fit ARMA(p,q) model
+    arma_model <- arima(train_series, order = c(order_ar, 0, order_ma))
+    
+    # Forecast for the next 4 quarters
+    forecast_result <- forecast(arma_model, h = 4)
+    
+    # Extract the forecasted values for the next 4 quarters
+    forecast_values <- as.numeric(forecast_result$mean)
+    
+    # Store the forecasted values
+    forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
+  }
+  
+  return(forecasts)
+}
+
+
+# running the functions
+inflation_series <- merged_df %>% select(starts_with('inflation')) %>% colnames()
+
+arma11_forecasts <- list()
+ar_forecasts <- list()
+for (series in inflation_series) {
+  arma11_forecasts[[series]] <- rolling_forecast_arma(df_inflation_authors, series)
+}
+
+
+```
+
+
+```{r testes}
+data = df_inflation_authors
+series_name = 'inflation_punew'
+order_ar=1
+order_ma=1
+initial_end=as.Date('1985-12-01')
+final_date=as.Date('2002-12-01')
+window_size=4
+
+
+
+forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
+  
+# loop for the rolling window
+for (y in year(initial_end):year(final_date)) {
+  train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))
+  test_data <- data %>% filter(FirstDate > as.Date(str_c(y, '-12-01')))
+  #
+  train_series <- train_data %>% select(series_name)
+  
+  # Fit ARMA(p,q) model
+  arma_model <- arima(train_series, order = c(order_ar, 0, order_ma))
+  
+  # Forecast for the next 4 quarters
+  forecast_result <- forecast(arma_model, h = 4)
+  
+  # Extract the forecasted values for the next 4 quarters
+  forecast_values <- as.numeric(forecast_result$mean)
+  
+  # Store the forecasted values
+  forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
+}
+
+```
 
