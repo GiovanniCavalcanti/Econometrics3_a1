@@ -399,6 +399,10 @@ rm(gap2, filter)
 
 ## li dataframe
 
+## lix dataframe
+
+## fac dataframe
+
 ## unemployment  dataframe
 df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
   arrange(DATE) %>%
@@ -422,7 +426,9 @@ df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
 ## join all dataframees
 df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
   full_join(., df_lshr_complete) %>%
-  select("FirstDate", "gdpg", "unrate", "lshr", "quarter", "group")
+  full_join(., df_gap1_complete) %>%
+  full_join(., df_gap2_complete) %>%
+  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "quarter", "group")
 
 ##____________________________________________________________________________##
 #   df_realmeasures_complete is the quarterly real measures data    
@@ -430,7 +436,7 @@ df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
 ##____________________________________________________________________________##
 # write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
 
-rm(df_gpd_complete, df_unemp_complete, df_lshr_complete)
+rm(df_gpd_complete, df_unemp_complete, df_lshr_complete, df_gap1_complete, df_gap2_complete)
 
 ## 0.3.0 Recreate Authors' Real measures panel
 
