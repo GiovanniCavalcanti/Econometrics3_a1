@@ -362,7 +362,7 @@ df_gpd_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate", "gdpg", "quarter", "group") %>%
   na.omit()
 
-## gap1 dataframe ((quadratically) detrended log GDP as a measure of the output gap las period)
+## gap1 dataframe ((quadratic) detrended log GDP as a measure of the output gap last period)
 df_gap1_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
   mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
@@ -397,11 +397,91 @@ df_gap2_complete <- gap2 %>%
 
 rm(gap2, filter)
 
-## li dataframe
+## li/lix dataframes
 
-## lix dataframe
+a <- readLines("real_measures_data/experimental_leading_indexes/xindex.ASC", skip = 10)
+a <- a[11:550]
+
+
+str_split(a[50], "\\s+")
+
+year <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  year[x] <- line_split[[1]][2]
+}
+
+xli <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  xli[x] <- line_split[[1]][4]
+}
+
+xli2 <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  xli2[x] <- line_split[[1]][8]
+}
+
+teste <- data.frame(year, xli, xli2)
+
+df_experimentalindex_complete <- teste[-1,]
+
+df_experimentalindex_complete <- df_experimentalindex_complete %>% 
+  mutate(FirstDate = dmy(paste("01", substr(year, 6, 7), substr(year, 1, 4), sep = "-")),
+         xli = as.numeric(xli),
+         xli2 = as.numeric(xli2)) %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+         group = year(FirstDate)) %>%
+  select(FirstDate, xli, xli2, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    xli = first(xli),
+    xli2 = first(xli2),
+    group = first(group)
+    )
+
+rm(teste, line_split, a, x)
 
 ## fac dataframe
+
+a <- readLines("real_measures_data/factor.txt")
+a <- a[3:513]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1959-02-01"), to = as.Date("2001-08-01"), by = "month")
+
+# Optionally, create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_fac_complete <- bind_cols(teste, df_months) %>%
+  mutate(fac = as.numeric.factor.) %>%
+  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+         group = year(FirstDate)) %>%
+  select(FirstDate, fac, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    fac = first(fac),
+    group = first(group)
+  )
 
 ## unemployment  dataframe
 df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
@@ -423,12 +503,18 @@ df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
          FirstDate = as.Date(FirstDate)) %>%
   select("FirstDate", "lshr", "quarter", "group")
 
+rm(x, xli, xli2, year, a, date_sequence, teste, df_months, factor, line_split)
+
 ## join all dataframees
 df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
   full_join(., df_lshr_complete) %>%
   full_join(., df_gap1_complete) %>%
   full_join(., df_gap2_complete) %>%
-  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "quarter", "group")
+  full_join(., df_experimentalindex_complete) %>%
+  full_join(., df_fac_complete) %>%
+  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "xli", "xli2", "fac", "quarter", "group")
+
+df_realmeasures_complete <- df_realmeasures_complete[1:(nrow(df_realmeasures_complete) - 2),]
 
 ##____________________________________________________________________________##
 #   df_realmeasures_complete is the quarterly real measures data    
