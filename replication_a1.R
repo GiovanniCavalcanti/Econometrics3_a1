@@ -13,6 +13,7 @@ library(gt)
 library(tibble)
 library(knitr)
 library(kableExtra)
+library(readxl)
 
 # 02 Load and adjust inflation data -----------------------
 
@@ -544,6 +545,24 @@ df_realmeasures_authors <- filter(df_inflation_complete, FirstDate >= as.Date("1
 
 
 
+
+
+
+
+
+
+
+
+# 04 Load and adjust survey measures -------------------------------------
+
+
+df_livingston_complete <- read_excel("survey_data/livingston_survey.xlsx",
+                                     na = "#N/A",
+                                     )
+df_spf_complete <- read_excel("survey_data/spf_survey.xlsx",
+                                     na = "#N/A",
+                              )
+df_michigan_survey <- read.csv("survey_data/michigan_survey_inflation.csv")
 
 
 
