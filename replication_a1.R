@@ -312,44 +312,6 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
 
-## 0.2.2 Recreate figure 1.A -----------------------------
-
-# Multiply the inflation columns by 100
-data_plot1A <- df_inflation_authors %>%
-  mutate(across(starts_with("inflation"), ~ .x * 100))
-
-# Pivot the data to a long format for plotting with ggplot2
-data_plot1A_long <- data_plot1A %>%
-  pivot_longer(cols = starts_with("inflation"), names_to = "inflation_type", values_to = "inflation_value")
-
-# Define linetypes and shapes based on the provided plot image
-line_types <- c("solid", "longdash", "dotted", "dotdash")
-shapes <- c(NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
-
-# Create a named vector to map the inflation types to linetypes
-names(line_types) <- unique(data_plot1A_long$inflation_type)
-names(shapes) <- unique(data_plot1A_long$inflation_type)
-
-# Plot the data
-plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
-  geom_line() +
-  geom_point(size = 3) +
-  scale_color_manual(values = c("black", "black", "black", "black")) +
-  scale_linetype_manual(values = line_types) +
-  scale_shape_manual(values = shapes) +
-  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
-  theme_minimal() +
-  theme(legend.title = element_blank(),
-        legend.position = "top",
-        axis.text.x = element_text(angle = 45, hjust = 1)) +
-  scale_x_date(date_breaks = "5 years", date_labels = "%Y") 
-
-# ggsave("inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
-
-
-
-
-
 # 03 Load and adjust real activities measures ----------------------------------
 
 ## gdpg dataframe
@@ -543,27 +505,132 @@ df_realmeasures_authors <- filter(df_inflation_complete, FirstDate >= as.Date("1
 # write.csv(df_realmeasures_authors, file = "df_realmeasures_authors.csv")
 
 
-
-
-
-
-
-
-
-
-
-
 # 04 Load and adjust survey measures -------------------------------------
 
 
 df_livingston_complete <- read_excel("survey_data/livingston_survey.xlsx",
                                      na = "#N/A",
                                      )
+
 df_spf_complete <- read_excel("survey_data/spf_survey.xlsx",
                                      na = "#N/A",
                               )
 df_michigan_survey <- read.csv("survey_data/michigan_survey_inflation.csv")
 
+## 04.1 Recreate figure 1.A -----------------------------
+
+teste <- df_livingston_complete %>%
+  select(FirstDate = Date, CPI_BP,CPI_12M) %>%
+  mutate(livingston_year = log(CPI_12M/CPI_BP),
+         FirstDate = as.Date(FirstDate)) %>%
+  mutate(livingston_year = 100 * lead(livingston_year,n = 2)) %>%
+  select(FirstDate, livingston_year) %>%
+  filter(FirstDate >= "1952-01-01" & FirstDate <= "2004-10-01") %>%
+  mutate(group = year(FirstDate)) %>%
+  filter(month(FirstDate) == 12)
+  
+
+# Multiply the inflation columns by 100
+data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("year"), ~ .x * 100)) %>%
+  full_join(., teste)
+
+rm(teste)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(group, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
+shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("authors_inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
+
+rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
+
+## 04.2 Recreate figure 1.B -----------------------------
+
+teste <- df_livingston_complete %>%
+  select(FirstDate = Date, CPI_BP,CPI_12M) %>%
+  mutate(livingston_year = log(CPI_12M/CPI_BP),
+         FirstDate = as.Date(FirstDate)) %>%
+  mutate(livingston_year = 100 * lead(livingston_year,n = 2)) %>%
+  select(FirstDate, livingston_year) %>%
+  filter(FirstDate >= "1978-01-01" & FirstDate <= "2004-10-01") %>%
+  mutate(group = year(FirstDate)) %>%
+  filter(month(FirstDate) == 12)
+
+teste1 <- df_spf_complete %>%
+  select(group = YEAR, CPIB) %>%
+  filter(group >= 1978 & group <= 2004) %>%
+  group_by(group) %>%
+  summarise(spf_year = first(CPIB))
+
+teste2 <- df_michigan_survey %>%
+  select(FirstDate = DATE, MICH) %>%
+  filter(FirstDate >= "1978-01-01" & FirstDate <= "2004-10-01") %>% 
+  filter(month(FirstDate) == 01) %>%
+  mutate(group = year(FirstDate)) %>%
+  select(group, mich_year = MICH)
+
+data_plot1B <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  filter(group >= 1978 & group <= 2004) %>%
+  select(group, punew_year) %>%
+  full_join(., teste) %>%
+  full_join(., teste1) %>%
+  full_join(., teste2)
+
+rm(teste, teste1, teste2)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1B_long <- data_plot1B %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(group, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash")
+shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1B_long$inflation_type)
+names(shapes) <- unique(data_plot1B_long$inflation_type)
+
+# Plot the data
+plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("fig1b.pdf", plot_1B, width = 11, height = 8.5)
+
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 
 
 
