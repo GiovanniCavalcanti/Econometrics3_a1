@@ -508,39 +508,72 @@ df_realmeasures_authors <- filter(df_inflation_complete, FirstDate >= as.Date("1
 # 04 Load and adjust survey measures -------------------------------------
 
 
-df_livingston_complete <- read_excel("survey_data/livingston_survey.xlsx",
-                                     na = "#N/A",
-                                     )
+# 1. Read the Excel file
+df_liv_excel <- read_excel('survey_data/livingston_survey.xlsx', sheet = 'CPI',
+                           na = "#N/A",
+)
+
+# 2 & 3. Loop through each row to calculate liv_inf and prepare the new data frame
+df_liv <- df_liv_excel %>%
+  mutate(liv = ifelse(is.na(CPI_12M), NA, (log(CPI_12M) - log(CPI_BP)) * 100)) %>%
+  select(Date, liv)
+
+# 4. Ensure the 'Date' column is in Date format and set as index
+df_liv$Date <- as.Date(df_liv$Date)
+
+# Prepare for bi-quarterly resampling by converting dates to year-quarter format
+df_liv <- df_liv %>%
+  mutate(quarter = as.yearqtr(Date)) %>%
+  group_by(quarter) %>%
+  summarize(liv = mean(liv, na.rm = TRUE))
+
+# 5 & 6. Resample on a bi-quarterly basis, calculate the mean and shift by 2 periods
+df_livingston_complete <- df_liv %>%
+  mutate(quarter = as.yearqtr(as.Date(quarter) - months(6))) %>%
+  arrange(quarter) %>%
+  mutate(group = year(quarter)) %>%
+  group_by(group) %>%
+  summarise(liv_year = mean(liv))
+
+rm(df_liv, df_liv_excel)
+  
 
 df_spf_complete <- read_excel("survey_data/spf_survey.xlsx",
                                      na = "#N/A",
                               )
+
 df_michigan_survey <- read.csv("survey_data/michigan_survey_inflation.csv")
 
-## 04.1 Recreate figure 1.A -----------------------------
+# Rename 'DATE' column to 'date'
+df_michigan_survey <- rename(df_michigan_survey, date = DATE)
 
-teste <- df_livingston_complete %>%
-  select(FirstDate = Date, CPI_BP,CPI_12M) %>%
-  mutate(livingston_year = log(CPI_12M/CPI_BP),
-         FirstDate = as.Date(FirstDate)) %>%
-  mutate(livingston_year = 100 * lead(livingston_year,n = 2)) %>%
-  select(FirstDate, livingston_year) %>%
-  filter(FirstDate >= "1952-01-01" & FirstDate <= "2004-10-01") %>%
-  mutate(group = year(FirstDate)) %>%
-  filter(month(FirstDate) == 12)
-  
+# Convert 'date' column to Date format
+df_michigan_survey$date <- as.Date(df_michigan_survey$date)
+
+# Convert dates to year-quarter format for grouping and resample
+df_michigan_survey <- df_michigan_survey %>%
+  mutate(quarter = as.yearqtr(date)) %>%
+  group_by(quarter) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
+
+# Shift the data by 4 quarters (1 year)
+df_michigan_survey <- df_michigan_survey %>%
+  mutate(quarter = as.yearqtr(as.Date(quarter) - months(12))) %>%
+  rename(mich_year = MICH)
+
+## 04.1 Recreate figure 1.A -----------------------------
 
 # Multiply the inflation columns by 100
 data_plot1A <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("year"), ~ .x * 100)) %>%
-  full_join(., teste)
+  full_join(., df_livingston_complete)  %>%
+  filter(group < 2003 & group >1951)
 
-rm(teste)
 
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1A_long <- data_plot1A %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(group, inflation_type, inflation_value)
+  select(group, inflation_type, inflation_value) 
 
 # Define linetypes and shapes based on the provided plot image
 line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
@@ -563,42 +596,36 @@ plot_1a <- ggplot(data_plot1A_long, aes(x = group, y = inflation_value, color = 
         legend.position = "top",
         axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave("authors_inflation_time_series.pdf", plot_1a, width = 11, height = 8.5)
+ggsave("fig1a.pdf", plot_1a, width = 11, height = 8.5)
 
 rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
 ## 04.2 Recreate figure 1.B -----------------------------
 
 teste <- df_livingston_complete %>%
-  select(FirstDate = Date, CPI_BP,CPI_12M) %>%
-  mutate(livingston_year = log(CPI_12M/CPI_BP),
-         FirstDate = as.Date(FirstDate)) %>%
-  mutate(livingston_year = 100 * lead(livingston_year,n = 2)) %>%
-  select(FirstDate, livingston_year) %>%
-  filter(FirstDate >= "1978-01-01" & FirstDate <= "2004-10-01") %>%
-  mutate(group = year(FirstDate)) %>%
-  filter(month(FirstDate) == 12)
+  filter(group >= 1978 & group <= 2002) 
 
 teste1 <- df_spf_complete %>%
   select(group = YEAR, CPIB) %>%
-  filter(group >= 1978 & group <= 2004) %>%
+  filter(group >= 1978 & group <= 2002) %>%
   group_by(group) %>%
   summarise(spf_year = first(CPIB))
 
 teste2 <- df_michigan_survey %>%
-  select(FirstDate = DATE, MICH) %>%
-  filter(FirstDate >= "1978-01-01" & FirstDate <= "2004-10-01") %>% 
-  filter(month(FirstDate) == 01) %>%
-  mutate(group = year(FirstDate)) %>%
-  select(group, mich_year = MICH)
+  select(FirstDate = date, mich_year) %>%
+  filter(year(FirstDate) >= 1978 & year(FirstDate) <= 2002) %>%
+  mutate(group = year(FirstDate))
 
 data_plot1B <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
-  filter(group >= 1978 & group <= 2004) %>%
+  filter(group >= 1978 & group <= 2002) %>%
   select(group, punew_year) %>%
   full_join(., teste) %>%
   full_join(., teste1) %>%
-  full_join(., teste2)
+  full_join(., teste2) %>%
+  select(!FirstDate) %>%
+  group_by(group) %>%
+  summarise(across(everything(), mean, na.rm = TRUE))
 
 rm(teste, teste1, teste2)
 
@@ -631,6 +658,8 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = 
 ggsave("fig1b.pdf", plot_1B, width = 11, height = 8.5)
 
 rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
+
+# 05 Recreate table 3 -----------------------------------------------------
 
 
 
