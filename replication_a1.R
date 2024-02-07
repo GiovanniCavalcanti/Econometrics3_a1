@@ -153,6 +153,8 @@ df_inflation_authors_yearly <- full_join(punew_year, puxhs_year, by = "group") %
   full_join(., pce_year, by = "group") %>%
   mutate(across(everything(), ~na_if(.x, 0)))
 
+
+
 ##____________________________________________________________________________##
 #   df_inflation_authors_yearly is the yearly aggregated inflation     
 #   This is the the authors' original yearly inflation panel  
@@ -461,7 +463,7 @@ kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW",
 
 # Clear environment
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
-rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
+rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearly_B, df_inflation_complete_yearly_C, statistics_labels)
 
 
 # 03 Load and adjust real activities measures ----------------------------------
@@ -714,7 +716,7 @@ data_plot1A_long <- data_plot1A %>%
 line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
 shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
 
-# Create a named vector to map the inflation types to linetypes
+# Create a named vector to map the inflation types to line1 types
 names(line_types) <- unique(data_plot1A_long$inflation_type)
 names(shapes) <- unique(data_plot1A_long$inflation_type)
 
@@ -855,9 +857,6 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = 
 ggsave("fig1b_extended.pdf", plot_1B, width = 11, height = 8.5)
 
 rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
-
-
-
 
 # 05 Recreate table 3 -----------------------------------------------------
 
