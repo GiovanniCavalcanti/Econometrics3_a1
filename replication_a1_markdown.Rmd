@@ -450,8 +450,6 @@ For the forecasts
 ```{r time_series_models}
 # Function to perform rolling window forecasting with ARMA(1,1) over years
 rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4, return_rmse=T) {
-  print(data)
-  print(series_name)
   # adding a forecast vector to store results
   forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
   
@@ -466,7 +464,7 @@ rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, ini
     phi <- arma_model$coef[1]
     psi <- arma_model$coef[2]
     mu <- arma_model$coef[3]
-    residuals <- model$residuals
+    residuals <- arma_model$residuals
     
     # Forecast for the next 4 quarters according to equation on paper
     forecast_q <- c()
@@ -499,21 +497,17 @@ rolling_forecast_ar_p <- function(data, series_name, initial_end=as.Date('1985-1
   
   # loop for the rolling window
   for (y in year(initial_end):year(final_date)) {
-    print(y)
     train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))  # Use data up to the current index for training
     train_series <- train_data %>% select(series_name)
     
     # find best ar order
     ar_order <- best_arma_order(train_series)
-    print(ar_order)
     # Fit AR(p) model
     arma_model <- stats::arima(train_series, order = c(ar_order, 0, 0))
-    print(arma_model)
     
     # Forecast for the next 4 quarters
     #  ... a little note: here we abstract from the way the paper is doing, since it would imply unecessary complexity (look at the equation for the quarterly forecast in page 1174)
     forecast_values <- as.numeric(forecast(arma_model, h = 4)$mean)
-    print(forecast_values)
     # Store forecast values
     forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
   }
@@ -528,14 +522,6 @@ rolling_forecast_ar_p <- function(data, series_name, initial_end=as.Date('1985-1
     return(forecasts)
   }
 }
-
-# y <- data %>% filter(FirstDate <= as.Date(str_c(1987, '-12-01'))) %>% select(inflation_punew)
-# model <- arima(y, order = c(3, 0, 0))
-# a <- as.numeric(forecast(model, h=4)$mean)
-# a
-
-
-rolling_forecast_ar_p(df_inflation_authors, inflation_series[1], return_rmse = T)
 
 # to find the best arma model based on some criteria (still don't contemplate ma orders or other info_criteria than BIC/SIC)
 best_arma_order <- function(series, ar_until = 10, ma_order = 0, info_criteria = 'bic'){
