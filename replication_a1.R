@@ -62,7 +62,7 @@ pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
 # Merge all dataframes on the FirstDate column
 df_inflation_complete <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
   select("FirstDate", contains("inflation")) %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q")) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   mutate(group = year(FirstDate))
 
 ##___________________________________________________________________##
@@ -469,20 +469,20 @@ rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearl
 # 03 Load and adjust real activities measures ----------------------------------
 
 ## gdpg dataframe
-df_gpd_complete <- read.csv("real_measures_data/gdp.csv") %>%
+df_gdp_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
-         gdp_lag = lag(gdp, n =1), 
+  mutate(gdp_lag = lag(gdp, n =1), 
          gdpg = log(gdp / gdp_lag), 
          group = year(FirstDate),
          FirstDate = as.Date(FirstDate)) %>%
-  select("FirstDate", "gdpg", "quarter", "group") %>%
+  select("FirstDate", "gdpg", "group") %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   na.omit()
 
 ## gap1 dataframe ((quadratic) detrended log GDP as a measure of the output gap last period)
 df_gap1_complete <- read.csv("real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"), 
+  mutate(quarter = as.yearqtr(FirstDate), 
          gap1 = log(lag(gdp, n =1))^2,
          group = year(FirstDate),
          FirstDate = as.Date(FirstDate)) %>%
@@ -508,7 +508,7 @@ df_gap2_complete <- gap2 %>%
   unnest(gap2) %>%
   mutate(FirstDate = as.Date(FirstDate),
          gap2 = gdp,
-         quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+         quarter = as.yearqtr(FirstDate),
          group = year(FirstDate)) %>%
   select(!gdp)
 
@@ -554,7 +554,7 @@ df_experimentalindex_complete <- df_experimentalindex_complete %>%
   mutate(FirstDate = dmy(paste("01", substr(year, 6, 7), substr(year, 1, 4), sep = "-")),
          xli = as.numeric(xli),
          xli2 = as.numeric(xli2)) %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+  mutate(quarter = as.yearqtr(FirstDate),
          group = year(FirstDate)) %>%
   select(FirstDate, xli, xli2, quarter, group) %>%
   group_by(quarter) %>%
@@ -590,7 +590,7 @@ df_months <- data.frame(FirstDate = date_sequence)
 
 df_fac_complete <- bind_cols(teste, df_months) %>%
   mutate(fac = as.numeric.factor.) %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
+  mutate(quarter = as.yearqtr(FirstDate),
          group = year(FirstDate)) %>%
   select(FirstDate, fac, quarter, group) %>%
   group_by(quarter) %>%
@@ -603,7 +603,7 @@ df_fac_complete <- bind_cols(teste, df_months) %>%
 ## unemployment  dataframe
 df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
   arrange(DATE) %>%
-  mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
+  mutate(Quarter = as.yearqtr(DATE)) %>%
   group_by(Quarter) %>%
   summarise(
     FirstDate = first(DATE),
@@ -615,15 +615,15 @@ df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
 ## labor share dataframe
 df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
   select("FirstDate" = "DATE", "lshr" = "PRS85006173") %>%
-  mutate(quarter = paste(year(FirstDate), quarter(FirstDate), sep = "-Q"),
-         group = year(FirstDate),
+  mutate(group = year(FirstDate),
          FirstDate = as.Date(FirstDate)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   select("FirstDate", "lshr", "quarter", "group")
 
 rm(x, xli, xli2, year, a, date_sequence, teste, df_months, factor, line_split)
 
 ## join all dataframees
-df_realmeasures_complete <- full_join(df_gpd_complete, df_unemp_complete, ) %>%
+df_realmeasures_complete <- full_join(df_gdp_complete, df_unemp_complete, ) %>%
   full_join(., df_lshr_complete) %>%
   full_join(., df_gap1_complete) %>%
   full_join(., df_gap2_complete) %>%
@@ -639,7 +639,7 @@ df_realmeasures_complete <- df_realmeasures_complete[1:(nrow(df_realmeasures_com
 ##____________________________________________________________________________##
 # write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
 
-rm(df_gpd_complete, df_unemp_complete, df_lshr_complete, df_gap1_complete, df_gap2_complete)
+rm(df_gdp_complete, df_unemp_complete, df_lshr_complete, df_gap1_complete, df_gap2_complete)
 
 ## 0.3.0 Recreate Authors' Real measures panel
 
@@ -683,14 +683,14 @@ df_michigan_complete <- read.csv("survey_data/michigan_survey_inflation.csv") %>
   rename(date = DATE) %>%
   mutate(
     date = as.Date(date),
-    quarter = as.yearqtr(date)
-  ) %>%
+    quarter = as.yearqtr(date)) %>%
   group_by(quarter = as.yearqtr(date - months(12))) %>% # Shift by 4 quarters (1 year) directly
   summarise(mich_year = mean(MICH, na.rm = TRUE), .groups = 'drop')
 
 df_surveys_complete <- full_join(df_livingston_complete, df_michigan_complete) %>%
   full_join(df_spf_complete) %>%
-  mutate(group = year(quarter))
+  mutate(group = year(quarter)) %>%
+  arrange(quarter)
 
 ## 04.1 Recreate figure 1.A -----------------------------
 
@@ -856,9 +856,22 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = 
 
 ggsave("fig1b_extended.pdf", plot_1B, width = 11, height = 8.5)
 
-rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes, teste)
 
-# 05 Recreate table 3 -----------------------------------------------------
+# Save dataframes as csv
+write.csv(df_experimentalindex_complete, file = "df_experimentalindex_complete.csv")
+write.csv(df_fac_complete, file = "df_fac_complete.csv")
+write.csv(df_inflation_authors, file = "df_inflation_authors.csv")
+write.csv(df_inflation_authors_yearly, file = "df_inflation_authors_yearly.csv")
+write.csv(df_inflation_complete, file = "df_inflation_complete.csv")
+write.csv(df_inflation_complete_yearly, file = "df_inflation_complete_yearly.csv")
+write.csv(df_livingston_complete, file = "df_livingston_complete.csv")
+write.csv(df_michigan_complete, file = "df_michigan_complete.csv")
+write.csv(df_realmeasures_authors, file = "df_realmeasures_authors.csv")
+write.csv(df_experimentalindex_complete, file = "df_experimentalindex_complete.csv")
+write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
+write.csv(df_spf_complete, file = "df_spf_complete.csv")
+write.csv(df_surveys_complete, file = "df_surveys_complete.csv")
 
 
 
