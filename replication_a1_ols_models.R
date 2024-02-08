@@ -349,17 +349,17 @@ colnames(valuesAPC10) <- "PC10"
 
 # appending findings
 
-forecastA<-list(forecastA_tab_PC1,forecastA_tab_PC2,forecastA_tab_PC3,forecastA_tab_PC4,
+forecastA_a<-list(forecastA_tab_PC1,forecastA_tab_PC2,forecastA_tab_PC3,forecastA_tab_PC4,
                 forecastA_tab_PC5,forecastA_tab_PC6,forecastA_tab_PC7,forecastA_tab_PC8,
                 forecastA_tab_PC9,forecastA_tab_PC10)
 
-valuesAPC<-as.data.frame(t(cbind(valuesAPC1,valuesAPC2,valuesAPC3,valuesAPC4,valuesAPC5,
+valuesAPC_a<-as.data.frame(t(cbind(valuesAPC1,valuesAPC2,valuesAPC3,valuesAPC4,valuesAPC5,
                  valuesAPC6,valuesAPC7,valuesAPC8,valuesAPC9,valuesAPC10))) 
 
-colnames(valuesAPC) <- c("PUNEW", "PUXHS", "PUXX", "PCE")
+colnames(valuesAPC_a) <- c("PUNEW", "PUXHS", "PUXX", "PCE")
 
 
-# post 1995 period regrerssions ----------
+# post 1995 period regressions ----------
 train_data <- filter(data, group <= 1995)
 test_data <- filter(data, group > 1995)
 
@@ -689,11 +689,11 @@ colnames(valuesAPC10) <- "PC10"
 
 # appending findings
 
-forecastA<-list(forecastA_tab_PC1,forecastA_tab_PC2,forecastA_tab_PC3,forecastA_tab_PC4,
+forecastA_b<-list(forecastA_tab_PC1,forecastA_tab_PC2,forecastA_tab_PC3,forecastA_tab_PC4,
                 forecastA_tab_PC5,forecastA_tab_PC6,forecastA_tab_PC7,forecastA_tab_PC8,
                 forecastA_tab_PC9,forecastA_tab_PC10)
 
-valuesAPC<-as.data.frame(t(cbind(valuesAPC1,valuesAPC2,valuesAPC3,valuesAPC4,valuesAPC5,
+valuesAPC_b<-as.data.frame(t(cbind(valuesAPC1,valuesAPC2,valuesAPC3,valuesAPC4,valuesAPC5,
                                  valuesAPC6,valuesAPC7,valuesAPC8,valuesAPC9,valuesAPC10))) 
 
-colnames(valuesAPC) <- c("PUNEW", "PUXHS", "PUXX", "PCE")
+colnames(valuesAPC_b) <- c("PUNEW", "PUXHS", "PUXX", "PCE")
