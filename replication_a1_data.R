@@ -76,22 +76,25 @@ rm(pce_df, punew_df, puxhs_df, puxx_df)
 # Now, we aggregate inflation by year.
 
 punew_year <- df_inflation_complete %>%
-  group_by(group) %>%
-  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+  mutate(punew_year = inflation_punew + lag(inflation_punew, 1) +
+           lag(inflation_punew, 2) + lag(inflation_punew, 3)) %>%
+  select(!contains("inflation"))
 puxhs_year <- df_inflation_complete %>%
-  group_by(group) %>%
-  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+  mutate(puxhs_year = inflation_puxhs + lag(inflation_puxhs, 1) +
+           lag(inflation_puxhs, 2) + lag(inflation_puxhs, 3)) %>%
+  select(!contains("inflation"))
 puxx_year <- df_inflation_complete %>%
-  group_by(group) %>%
-  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+  mutate(puxx_year = inflation_puxx + lag(inflation_puxx, 1) +
+           lag(inflation_puxx, 2) + lag(inflation_puxx, 3)) %>%
+  select(!contains("inflation"))
 pce_year <- df_inflation_complete %>%
-  group_by(group) %>%
-  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+  mutate(pce_year = inflation_pce + lag(inflation_pce, 1) +
+           lag(inflation_pce, 2) + lag(inflation_pce, 3)) %>%
+  select(!contains("inflation"))
 
-df_inflation_complete_yearly <- full_join(punew_year, puxhs_year, by = "group") %>%
-  full_join(., puxx_year, by = "group") %>%
-  full_join(., pce_year, by = "group") %>%
-  mutate(across(everything(), ~na_if(.x, 0)))
+df_inflation_complete_yearly <- full_join(punew_year, puxhs_year ) %>%
+  full_join(., puxx_year ) %>%
+  full_join(., pce_year ) 
 
 ##____________________________________________________________________________##
 #   df_inflation_complete_yearly is the yearly aggregated inflation     
@@ -134,27 +137,25 @@ df_inflation_authors <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDa
 # Now, we agregate inflation by year.
 
 punew_year <- df_inflation_authors %>%
-  group_by(group) %>%
-  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
-puxhs_year <- df_inflation_authors %>%
-  group_by(group) %>%
-  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
-puxx_year <- df_inflation_authors %>%
-  group_by(group) %>%
-  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
-pce_year <- df_inflation_authors %>%
-  group_by(group) %>%
-  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+  mutate(punew_year = inflation_punew + lag(inflation_punew, 1) +
+           lag(inflation_punew, 2) + lag(inflation_punew, 3)) %>%
+  select(!contains("inflation"))
+puxhs_year <- df_inflation_complete %>%
+  mutate(puxhs_year = inflation_puxhs + lag(inflation_puxhs, 1) +
+           lag(inflation_puxhs, 2) + lag(inflation_puxhs, 3)) %>%
+  select(!contains("inflation"))
+puxx_year <- df_inflation_complete %>%
+  mutate(puxx_year = inflation_puxx + lag(inflation_puxx, 1) +
+           lag(inflation_puxx, 2) + lag(inflation_puxx, 3)) %>%
+  select(!contains("inflation"))
+pce_year <- df_inflation_complete %>%
+  mutate(pce_year = inflation_pce + lag(inflation_pce, 1) +
+           lag(inflation_pce, 2) + lag(inflation_pce, 3)) %>%
+  select(!contains("inflation"))
 
-rm(pce_filter, punew_puxhs_filter, puxx_filter)
-
-df_inflation_authors_yearly <- full_join(punew_year, puxhs_year, by = "group") %>%
-  full_join(., puxx_year, by = "group") %>%
-  full_join(., pce_year, by = "group") %>%
-  mutate(across(everything(), ~na_if(.x, 0)))
-
-
-
+df_inflation_authors_yearly <- full_join(punew_year, puxhs_year ) %>%
+  full_join(., puxx_year ) %>%
+  full_join(., pce_year ) 
 ##____________________________________________________________________________##
 #   df_inflation_authors_yearly is the yearly aggregated inflation     
 #   This is the the authors' original yearly inflation panel  
@@ -696,11 +697,6 @@ df_surveys_complete <- full_join(df_livingston_complete, df_michigan_complete) %
 
 # Multiply the inflation columns by 100
 
-df_livingston_complete <- df_livingston_complete %>%
-  mutate(group = year(quarter)) %>%
-  group_by(group) %>%
-  summarise(liv_year = mean(liv_year, na.rm = TRUE), .groups = 'drop')
-
 data_plot1A <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("year"), ~ .x * 100)) %>%
   full_join(., df_livingston_complete)  %>%
@@ -710,7 +706,7 @@ data_plot1A <- df_inflation_authors_yearly %>%
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1A_long <- data_plot1A %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(group, inflation_type, inflation_value) 
+  select(FirstDate, inflation_type, inflation_value) 
 
 # Define linetypes and shapes based on the provided plot image
 line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
@@ -721,7 +717,7 @@ names(line_types) <- unique(data_plot1A_long$inflation_type)
 names(shapes) <- unique(data_plot1A_long$inflation_type)
 
 # Plot the data
-plot_1a <- ggplot(data_plot1A_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
   geom_line() +
   geom_point(size = 3) +
   scale_color_manual(values = c("black", "black", "black", "black", "black")) +
