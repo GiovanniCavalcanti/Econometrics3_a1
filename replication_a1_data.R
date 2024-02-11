@@ -586,7 +586,7 @@ teste <- data.frame(as.numeric(factor))
 # Generate the sequence of dates by month
 date_sequence <- seq.Date(from = as.Date("1959-02-01"), to = as.Date("2001-08-01"), by = "month")
 
-# Optionally, create a data frame with this date sequence as a column
+# Create a data frame with this date sequence as a column
 df_months <- data.frame(FirstDate = date_sequence)
 
 df_fac_complete <- bind_cols(teste, df_months) %>%
@@ -623,6 +623,72 @@ df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
 
 rm(x, xli, xli2, year, a, date_sequence, teste, df_months, factor, line_split)
 
+##fb_rate dataframe 
+
+a <- readLines("real_measures_data/FBrate.txt")
+a <- a[3:609]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1952-07-01"), to = as.Date("2003-01-01"), by = "month")
+
+# Create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_rate_complete <- bind_cols(teste, df_months) %>%
+  mutate(rate = as.numeric.factor.) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, rate, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    rate = first(rate),
+    group = first(group)
+  )
+
+##fb_yield dataframe 
+
+a <- readLines("real_measures_data/FByield.txt")
+a <- a[3:609]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  print(line_split)
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1952-07-01"), to = as.Date("2003-01-01"), by = "month")
+
+# Create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_yield_complete <- bind_cols(teste, df_months) %>%
+  mutate(yield = as.numeric.factor.) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, yield, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    yield = first(yield),
+    group = first(group)
+  )
+
 ## join all dataframees
 df_realmeasures_complete <- full_join(df_gdp_complete, df_unemp_complete, ) %>%
   full_join(., df_lshr_complete) %>%
@@ -630,7 +696,9 @@ df_realmeasures_complete <- full_join(df_gdp_complete, df_unemp_complete, ) %>%
   full_join(., df_gap2_complete) %>%
   full_join(., df_experimentalindex_complete) %>%
   full_join(., df_fac_complete) %>%
-  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "xli", "xli2", "fac", "quarter", "group")
+  full_join(., df_rate_complete) %>%
+  full_join(., df_yield_complete) %>%
+  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "xli", "xli2", "fac", "rate", "yield", "quarter", "group")
 
 df_realmeasures_complete <- df_realmeasures_complete[1:(nrow(df_realmeasures_complete) - 2),]
 
@@ -659,18 +727,17 @@ df_realmeasures_authors <- filter(df_realmeasures_complete, FirstDate >= as.Date
 ##____________________________________________________________________________##
 # write.csv(df_realmeasures_authors, file = "df_realmeasures_authors.csv")
 
-
 # 04 Load and adjust survey measures -------------------------------------
 
 # Load survey data from Excel, adjust CPI calculations, and resample bi-quarterly
 df_livingston_complete <- read_excel('survey_data/livingston_survey.xlsx', sheet = 'CPI', na = "#N/A") %>%
   mutate(
-    liv = if_else(is.na(CPI_12M), NA_real_, (log(CPI_12M) - log(CPI_BP)) * 100),
+    liv_year = if_else(is.na(CPI_12M), NA_real_, (log(CPI_12M) - log(CPI_BP)) * 100),
     Date = as.Date(Date),
-    quarter = as.yearqtr(Date)
+    quarter = as.yearqtr(Date),
+    group = year(Date)
   ) %>%
-  group_by(quarter = as.yearqtr(Date - months(6))) %>% # Direct calculation for bi-quarterly shift
-  summarise(liv_year = mean(liv, na.rm = TRUE), .groups = 'drop')
+  select(quarter, group, liv_year)
 
 # Load and adjust SPF survey data
 df_spf_complete <- read_excel("survey_data/spf_survey.xlsx", na = "#N/A") %>%
@@ -706,7 +773,8 @@ data_plot1A <- df_inflation_authors_yearly %>%
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1A_long <- data_plot1A %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(FirstDate, inflation_type, inflation_value) 
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
 
 # Define linetypes and shapes based on the provided plot image
 line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
@@ -735,23 +803,19 @@ rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
 ## 04.2 Recreate figure 1.B -----------------------------
 
-teste <- df_surveys_complete %>%
-  group_by(group) %>%
-  summarise(across(everything(), ~ mean(., na.rm=T)))
-
 data_plot1B <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
   filter(group >= 1978 & group <= 2002) %>%
-  select(group, punew_year) %>%
-  left_join(teste)
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
 
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1B_long <- data_plot1B %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(group, inflation_type, inflation_value)
+  select(FirstDate, inflation_type, inflation_value)
 
 # Define linetypes and shapes based on the provided plot image
-line_types <- c("solid", "longdash", "dotted", "dotdash")
+line_types <- c("solid", "dotted", "dotdash", "longdash")
 shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
 
 # Create a named vector to map the inflation types to linetypes
@@ -759,7 +823,7 @@ names(line_types) <- unique(data_plot1B_long$inflation_type)
 names(shapes) <- unique(data_plot1B_long$inflation_type)
 
 # Plot the data
-plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
   geom_line() +
   geom_point(size = 3) +
   scale_color_manual(values = c("black", "black", "black", "black")) +
@@ -775,32 +839,30 @@ ggsave("fig1b.pdf", plot_1B, width = 11, height = 8.5)
 
 rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 
-
-
 ## 04.3 Recreate figure 1.A (extended) -----------------------------
 
 # Multiply the inflation columns by 100
 
-data_plot1A <- df_inflation_complete_yearly %>%
+data_plot1A <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("year"), ~ .x * 100)) %>%
   full_join(., df_livingston_complete)
-
 
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1A_long <- data_plot1A %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(group, inflation_type, inflation_value) 
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
 
 # Define linetypes and shapes based on the provided plot image
 line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
 shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
 
-# Create a named vector to map the inflation types to linetypes
+# Create a named vector to map the inflation types to line1 types
 names(line_types) <- unique(data_plot1A_long$inflation_type)
 names(shapes) <- unique(data_plot1A_long$inflation_type)
 
 # Plot the data
-plot_1a <- ggplot(data_plot1A_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
   geom_line() +
   geom_point(size = 3) +
   scale_color_manual(values = c("black", "black", "black", "black", "black")) +
@@ -819,18 +881,18 @@ rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
 ## 04.2 Recreate figure 1.B (extended)-----------------------------
 
-data_plot1B <- df_inflation_complete_yearly %>%
+data_plot1B <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
-  select(group, punew_year) %>%
-  left_join(teste)
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
 
 # Pivot the data to a long format for plotting with ggplot2
 data_plot1B_long <- data_plot1B %>%
   pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
-  select(group, inflation_type, inflation_value)
+  select(FirstDate, inflation_type, inflation_value)
 
 # Define linetypes and shapes based on the provided plot image
-line_types <- c("solid", "longdash", "dotted", "dotdash")
+line_types <- c("solid", "dotted", "dotdash", "longdash")
 shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
 
 # Create a named vector to map the inflation types to linetypes
@@ -838,7 +900,7 @@ names(line_types) <- unique(data_plot1B_long$inflation_type)
 names(shapes) <- unique(data_plot1B_long$inflation_type)
 
 # Plot the data
-plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
   geom_line() +
   geom_point(size = 3) +
   scale_color_manual(values = c("black", "black", "black", "black")) +
@@ -852,7 +914,7 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = group, y = inflation_value, color = 
 
 ggsave("fig1b_extended.pdf", plot_1B, width = 11, height = 8.5)
 
-rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes, teste)
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 
 # Save dataframes as csv
 write.csv(df_experimentalindex_complete, file = "df_experimentalindex_complete.csv")
