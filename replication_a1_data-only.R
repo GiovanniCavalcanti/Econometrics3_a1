@@ -180,10 +180,11 @@ df_gdp_complete <- read_csv("data/input/real_measures_data/gdp.csv") %>%
   na.omit()
 
 ## gap1 dataframe ((quadratic) detrended log GDP as a measure of the output gap last period)
-df_gap1_complete <- read_csv("data/input/real_measures_data/gdp.csv") %>%
+df_gap1_complete <- read.csv("data/input/real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(FirstDate = as.Date(FirstDate)) %>%
   mutate(quarter = as.yearqtr(FirstDate), 
-         gap1 = log(lag(gdp, n=1))^2,
+         gap1 = log(lag(gdp, n =1))^2,
          group = year(FirstDate),
          FirstDate = as.Date(FirstDate)) %>%
   select("FirstDate", "gap1", "quarter", "group") %>%
@@ -303,6 +304,7 @@ df_fac_complete <- bind_cols(teste, df_months) %>%
 ## unemployment  dataframe
 df_unemp_complete <- read.csv("data/input/real_measures_data/unemp.csv") %>%
   arrange(DATE) %>%
+  mutate(DATE = as.Date(DATE)) %>%
   mutate(Quarter = as.yearqtr(DATE)) %>%
   group_by(Quarter) %>%
   summarise(
