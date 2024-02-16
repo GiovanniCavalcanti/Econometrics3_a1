@@ -19,7 +19,8 @@ df_realmeasures_authors <- read.csv("df_realmeasures_authors.csv")
 # Prepare data
 df_phillips <- df_inflation_authors %>%
   left_join(df_realmeasures_authors) %>% 
-  tibble()
+  tibble() %>%
+  arrange(FirstDate)
 
 y <- 'inflation_punew'
 x <- 'gdpg'
