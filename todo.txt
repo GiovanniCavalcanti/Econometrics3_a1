@@ -1,0 +1,18 @@
+todo
+
+data
+  1. adjustment over the first, not the last quarters;
+  2. missing data from real activity measures
+  brazil?
+  
+models
+  ts
+    1. check results after adjusting the data;
+    2. organize a table
+  ols
+    1. check results after adjusting the data;
+    2. organize a table
+  ols+
+    1. create a loop to rerun the functions for the ols
+
+robustness?

@@ -150,7 +150,6 @@ Part of the data (mainly from real data sources and when it comes from other pap
 
 ```{r load_data}
 
-# todo: missing data from real activity
 "
 FRED:
 1. GDP
@@ -450,6 +449,8 @@ Here we'll estimate the ARMA, AR, RW and AORW.
 For the forecasts
 
 ```{r time_series_models}
+# todo: create a table for this
+
 # Function to perform rolling window forecasting with ARMA(1,1) over years
 rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4, return_rmse=T) {
   # adding a forecast vector to store results
