@@ -43,13 +43,13 @@ process_inflation_data <- function(file_path, inflation_label, period_column = "
 }
 
 # Process each dataset
-punew_df <- process_inflation_data("data/punew_1947-2023.csv", "inflation_punew")
-puxhs_df <- process_inflation_data("data/puxhs_1947-2023.csv", "inflation_puxhs")
-puxx_df <- process_inflation_data("data/puxx_1957-2023.csv", "inflation_puxx")
+punew_df <- process_inflation_data("data/input/inflation_data/punew_1947-2023.csv", "inflation_punew")
+puxhs_df <- process_inflation_data("data/input/inflation_data/puxhs_1947-2023.csv", "inflation_puxhs")
+puxx_df <- process_inflation_data("data/input/inflation_data/puxx_1957-2023.csv", "inflation_puxx")
 
 rm(process_inflation_data)
 
-pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
+pce_df <- read_csv("data/input/inflation_data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
   rename(P = "DPCERD3Q086SBEA") %>%
   mutate(
     P_lag = lag(P),
@@ -471,7 +471,7 @@ rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearl
 # 03 Load and adjust real activities measures ----------------------------------
 
 ## gdpg dataframe
-df_gdp_complete <- read.csv("real_measures_data/gdp.csv") %>%
+df_gdp_complete <- read.csv("data/input/real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
   mutate(gdp_lag = lag(gdp, n =1), 
          gdpg = log(gdp / gdp_lag), 
@@ -482,8 +482,9 @@ df_gdp_complete <- read.csv("real_measures_data/gdp.csv") %>%
   na.omit()
 
 ## gap1 dataframe ((quadratic) detrended log GDP as a measure of the output gap last period)
-df_gap1_complete <- read.csv("real_measures_data/gdp.csv") %>%
+df_gap1_complete <- read.csv("data/input/real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(FirstDate = as.Date(FirstDate)) %>%
   mutate(quarter = as.yearqtr(FirstDate), 
          gap1 = log(lag(gdp, n =1))^2,
          group = year(FirstDate),
@@ -495,12 +496,12 @@ df_gap1_complete <- read.csv("real_measures_data/gdp.csv") %>%
 
 library(hpfilter) # implements the modified filter for gap2
 
-gap2<- read.csv("real_measures_data/gdp.csv") %>%
+gap2<- read.csv("data/input/real_measures_data/gdp.csv") %>%
   select("gdp" = "GDPC1") 
 
 filter <- hp1(gap2, lambda = 1600)
 
-gap2 <- read.csv("real_measures_data/gdp.csv") %>%
+gap2 <- read.csv("data/input/real_measures_data/gdp.csv") %>%
   select("FirstDate" = "DATE", "gdp" = "GDPC1")
 
 gap2$gap_2 <- filter
@@ -518,7 +519,7 @@ rm(gap2, filter)
 
 ## li/lix dataframes
 
-a <- readLines("real_measures_data/experimental_leading_indexes/xindex.ASC", skip = 10)
+a <- readLines("data/input/real_measures_data/experimental_leading_indexes/xindex.ASC", skip = 10)
 a <- a[11:550]
 
 
@@ -545,7 +546,7 @@ xli2 <- c()
 for (x in 1:length(a)) {
   line_split <- str_split(a[x], "\\s+")
   print(line_split)
-  xli2[x] <- line_split[[1]][8]
+  xli2[x] <- line_split[[1]][7]
 }
 
 teste <- data.frame(year, xli, xli2)
@@ -571,7 +572,7 @@ rm(teste, line_split, a, x)
 
 ## fac dataframe
 
-a <- readLines("real_measures_data/factor.txt")
+a <- readLines("data/input/real_measures_data/factor.txt")
 a <- a[3:513]
 
 factor <- c()
@@ -603,8 +604,9 @@ df_fac_complete <- bind_cols(teste, df_months) %>%
   )
 
 ## unemployment  dataframe
-df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
+df_unemp_complete <- read.csv("data/input/real_measures_data/unemp.csv") %>%
   arrange(DATE) %>%
+  mutate(DATE = as.Date(DATE)) %>%
   mutate(Quarter = as.yearqtr(DATE)) %>%
   group_by(Quarter) %>%
   summarise(
@@ -615,7 +617,7 @@ df_unemp_complete <- read.csv("real_measures_data/unemp.csv") %>%
   select("FirstDate", "unrate" = "UNRATE", "quarter" = "Quarter", "group")
 
 ## labor share dataframe
-df_lshr_complete <- read.csv("real_measures_data/lshr.csv") %>%
+df_lshr_complete <- read.csv("data/input/real_measures_data/lshr.csv") %>%
   select("FirstDate" = "DATE", "lshr" = "PRS85006173") %>%
   mutate(group = year(FirstDate),
          FirstDate = as.Date(FirstDate)) %>%
@@ -626,7 +628,7 @@ rm(x, xli, xli2, year, a, date_sequence, teste, df_months, factor, line_split)
 
 ##fb_rate dataframe 
 
-a <- readLines("real_measures_data/FBrate.txt")
+a <- readLines("data/input/real_measures_data/FBrate.txt")
 a <- a[3:609]
 
 factor <- c()
@@ -659,7 +661,7 @@ df_rate_complete <- bind_cols(teste, df_months) %>%
 
 ##fb_yield dataframe 
 
-a <- readLines("real_measures_data/FByield.txt")
+a <- readLines("data/input/real_measures_data/FByield.txt")
 a <- a[3:609]
 
 factor <- c()
@@ -707,7 +709,7 @@ df_realmeasures_complete <- df_realmeasures_complete[1:(nrow(df_realmeasures_com
 #   df_realmeasures_complete is the quarterly real measures data    
 #   This is the complete quarterly real measures data 
 ##____________________________________________________________________________##
-# write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
+write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
 
 rm(df_gdp_complete, df_unemp_complete, df_lshr_complete, df_gap1_complete, df_gap2_complete)
 
