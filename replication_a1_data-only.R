@@ -49,7 +49,7 @@ puxx_df <- process_inflation_data("data/input/inflation_data/puxx_1957-2023.csv"
 
 rm(process_inflation_data)
 
-pce_df <- read_csv("data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
+pce_df <- read_csv("data/input/inflation_data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
   rename(P = "DPCERD3Q086SBEA") %>%
   mutate(
     P_lag = lag(P),
