@@ -65,6 +65,7 @@ df_inflation_complete <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_
   mutate(quarter = as.yearqtr(FirstDate)) %>%
   mutate(group = year(FirstDate))
 
+# calebe: thank you for noting this!
 ##___________________________________________________________________##
 #   Save the df_inflation_complete as df_inflation_complete.csv.      
 #   This is the the complete inflation panel!                           

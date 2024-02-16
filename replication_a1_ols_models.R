@@ -10,8 +10,10 @@ library(knitr)
 library(kableExtra)
 library(readxl)
 
-
+# ---
 # Load data
+# ---
+
 # df_inflation_complete <- read.csv("df_inflation_complete.csv")
 df_inflation_authors <- read.csv("df_inflation_authors.csv")
 df_realmeasures_authors <- read.csv("df_realmeasures_authors.csv")
@@ -21,25 +23,10 @@ df_phillips <- df_inflation_authors %>%
   left_join(df_realmeasures_authors) %>% 
   tibble()
 
-y <- 'inflation_punew'
-x <- 'gdpg'
-teste <- df_phillips
-for (p in 1:3) {
-  teste <- teste %>% 
-    mutate(!!str_c('lag', p, '_', y) := dplyr::lag(!!sym(y), p),
-           !!str_c('lag', p, '_', x) := dplyr::lag(!!sym(x), p))
-}
+# ---
+# Functions
+# ---
 
-dependent_var <- y
-independent_var <- teste %>% select(starts_with('lag1')) %>% colnames()
-
-for (p in 2:3) {
-  independent_var_plus <- teste %>% select(starts_with(paste0('lag', p))) %>% colnames()
-  independent_var <- c(independent_var, independent_var_plus)
-}
-
-reg_formula <- formula(paste(dependent_var, '~', paste(independent_var, collapse=' + ')))
-model <- lm(reg_formula, data = teste)
 # a function just to lag our dataset
 lag_df <- function(df, y, x, lag_until=5){
   models <- list()
@@ -91,6 +78,10 @@ ols_predict <- function(train_data, test_data, y, x, max_lag=5){
   return(forecast_values$mean)
 }
 
+# ---
+# Run
+# ---
+
 all_y <- df_phillips %>% select(starts_with('inflation')) %>% colnames()  # "inflation_punew" "inflation_puxhs" "inflation_puxx"  "inflation_pce"
 all_x <-df_phillips %>% select(gdpg:fac) %>% colnames()  # "gdpg"            "gap1"            "gap2"            "unrate"          "lshr"            "xli"             "xli2"            "fac"
 
@@ -112,7 +103,7 @@ for (y in all_y) {
     
     # todo: store the arma11 rmse from previous exercise
     # compute (relative) rmse
-    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2)))
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
     # model_lambda
@@ -145,4 +136,51 @@ forecast_values <- ols_predict(train_data, test_data, y, x)
 # todo: store the arma11 rmse from previous exercise
 # compute (relative) rmse
 rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2)))
+
+
+# ---
+# test section
+# ---
+
+
+# a similar to the main loop above
+
+y <- 'inflation_punew'
+x <- 'gap1'
+
+# define all the dataframes relevant
+df_lag <- lag_df(df_phillips, y, x)
+train_data <- df_lag %>% filter(group <= 1985)
+test_data <- df_lag %>% filter(group > 1985)
+
+# get forecast
+forecast_values <- ols_predict(train_data, test_data, y, x)
+
+# todo: store the arma11 rmse from previous exercise
+# compute (relative) rmse
+rmse_test <- sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T))
+
+
+
+# other
+
+y <- 'inflation_punew'
+x <- 'gdpg'
+teste <- df_phillips
+for (p in 1:3) {
+  teste <- teste %>% 
+    mutate(!!str_c('lag', p, '_', y) := dplyr::lag(!!sym(y), p),
+           !!str_c('lag', p, '_', x) := dplyr::lag(!!sym(x), p))
+}
+
+dependent_var <- y
+independent_var <- teste %>% select(starts_with('lag1')) %>% colnames()
+
+for (p in 2:3) {
+  independent_var_plus <- teste %>% select(starts_with(paste0('lag', p))) %>% colnames()
+  independent_var <- c(independent_var, independent_var_plus)
+}
+
+reg_formula <- formula(paste(dependent_var, '~', paste(independent_var, collapse=' + ')))
+model <- lm(reg_formula, data = teste)
 
