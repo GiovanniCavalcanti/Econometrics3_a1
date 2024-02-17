@@ -17,20 +17,20 @@ library(readxl)
 
 # 02 load dataframes used ------------------------
 
-df_inflation_complete <- read.csv(file = "df_inflation_complete.csv")
-df_inflation_authors <- read.csv(file = "df_inflation_authors.csv")
-df_inflation_authors_yearly <- read.csv(file = "df_inflation_authors_yearly.csv")
+df_inflation_complete <- read.csv(file = "data/output/df_inflation_complete.csv")
+df_inflation_authors <- read.csv(file = "data/output/df_inflation_authors.csv")
+df_inflation_authors_yearly <- read.csv(file = "data/output/df_inflation_authors_yearly.csv")
 
 # 03 models ------------------------------------
 
 # Function to perform rolling window forecasting with ARMA(1,1) over years
-rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4, return_rmse=T) {
+rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=1985, final_date=2002, window_size=4, return_rmse=T) {
   # adding a forecast vector to store results
-  forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
+  forecasts <- numeric((final_date - initial_end)*window_size)
   
   # loop for the rolling window
-  for (y in year(initial_end):year(final_date)) {
-    train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))  # Use data up to the current index for training
+  for (y in initial_end:(final_date-1)) {  # we take one out to don't count the last year
+    train_data <- data %>% filter(group <= y)  # Use data up to the current index for training
     train_series <- train_data %>% .[series_name]
     
     # Fit ARMA(1,1) model: yt = mu + phi*yt-1 + epsilon_t + psi*epsilon_{t-1}
@@ -50,14 +50,14 @@ rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, ini
     # just making sure
     forecast_values <- as.numeric(forecast_q)
     # Store forecast values
-    forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
+    forecasts[((y - initial_end)*window_size + 1):((y - initial_end+1)*window_size)] <- forecast_values
   }
   
   # decide whether to return forecasts or root mean squared errors (RMSE)
   if (return_rmse) {
     # get data to validate forecasts
-    test_series <- data %>% filter(FirstDate > as.Date(initial_end)) %>% .[series_name]
-    rmse <- sqrt(sum((test_series - forecasts)^2))
+    test_series <- data %>% filter(group > initial_end) %>% .[series_name]
+    rmse <- sqrt(sum((test_series - forecasts)^2), na.rm=T)
     return(rmse)
   } else{
     return(forecasts)
@@ -66,13 +66,13 @@ rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, ini
 
 # very similar to the last function, 
 # with the difference that now we'll choose AR(p) recursively by SIC
-rolling_forecast_ar_p <- function(data, series_name, initial_end=as.Date('1985-12-01'), final_date=as.Date('2002-12-01'), window_size=4, return_rmse=T) {
+rolling_forecast_ar_p <- function(data, series_name, initial_end=1985, final_date=2002, window_size=4, return_rmse=T) {
   # creating a forecast vector to store results
-  forecasts <- numeric((year(final_date) - year(initial_end))*window_size)
+  forecasts <- numeric((final_date - initial_end)*window_size)
   
   # loop for the rolling window
-  for (y in year(initial_end):year(final_date)) {
-    train_data <- data %>% filter(FirstDate <= as.Date(str_c(y, '-12-01')))  # Use data up to the current index for training
+  for (y in initial_end:(final_date-1)) {
+    train_data <- data %>% filter(group <= y)  # Use data up to the current index for training
     train_series <- train_data %>% select(series_name)
     
     # find best ar order
@@ -84,14 +84,14 @@ rolling_forecast_ar_p <- function(data, series_name, initial_end=as.Date('1985-1
     #  ... a little note: here we abstract from the way the paper is doing, since it would imply unecessary complexity (look at the equation for the quarterly forecast in page 1174)
     forecast_values <- as.numeric(forecast(arma_model, h = 4)$mean)
     # Store forecast values
-    forecasts[((y - year(initial_end))*window_size + 1):((y - year(initial_end)+1)*window_size)] <- forecast_values
+    forecasts[((y - initial_end)*window_size + 1):((y - initial_end+1)*window_size)] <- forecast_values
   }
   
   # decide whether to return forecasts or root mean squared errors (RMSE)
   if (return_rmse) {
     # get data to validate forecasts
-    test_series <- data %>% filter(FirstDate > as.Date(initial_end)) %>% .[series_name]
-    rmse <- sqrt(sum((test_series - forecasts)^2))
+    test_series <- data %>% filter(group > initial_end) %>% .[series_name]
+    rmse <- sqrt(sum((test_series - forecasts)^2), na.rm=T)
     return(rmse)
   } else{
     return(forecasts)
@@ -114,11 +114,23 @@ best_arma_order <- function(series, ar_until = 10, ma_order = 0, info_criteria =
 # running the functions
 inflation_series <- df_inflation_authors %>% select(starts_with('inflation')) %>% colnames()
 
+# defining vectors to store data
 arma11_rmse <- c()
 arp_rmse <- c()
+arma11_forecasts <- list()
+# loop
 for (x in 1:length(inflation_series)) {
+  print(inflation_series[x])
+  # first the simple rmse values for each inflation series
   arma11_rmse[x] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x])
   arp_rmse[x] <- rolling_forecast_ar_p(df_inflation_authors, inflation_series[x])
+  
+  # we need also the forecasts of the arma11 model to run the lambda models
+  arma11_forecasts[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x], return_rmse = F)
 }
+
+# --- 
+# Test section ----
+# ---
 
 rolling_forecast_arma(df_inflation_authors, inflation_series[1], return_rmse = T)
