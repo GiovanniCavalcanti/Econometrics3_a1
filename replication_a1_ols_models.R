@@ -314,7 +314,6 @@ table_term_structure_specific <- create_table_inflation_models(values_estats, al
 print(table_term_structure_specific)
 
 
-
 # ---
 # Test section  ----
 # ---
