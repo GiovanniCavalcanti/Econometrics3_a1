@@ -26,7 +26,7 @@ library(rbcb)         # Provides access to BCB's web services for economic data.
 
 ## Extract inflation data
 # Define IDs for the IPCA and EXFE series.
-my.id <- c('ipca' = 433, 'exfe' = 28751)
+my.id <- c('ipca' = 433, 'ipca_15' = 7478, 'exfe' = 28751)
 # Fetch series data within a 30-year range from today.
 df <- gbcbd_get_series(my.id, cache.path = tempdir(),
                        first.date = Sys.Date() - 30 * 365,
