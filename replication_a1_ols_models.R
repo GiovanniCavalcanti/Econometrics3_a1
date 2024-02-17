@@ -101,6 +101,25 @@ ols_predict <- function(train_data, test_data, y, x, max_lag=5){
   return(forecast_values$mean)
 }
 
+# creates a matrix with (y*x) rows and (estats) columns
+create_table_inflation_models <- function(values_estats, y, x, estats=c('relative_rmse', '1-lambda', 'hh_error', 'nw_error')){
+  # values_stats should be a list of same size as the estats, each value being y*x size (in that order)
+  # storing data for table
+  table_paper <- matrix(NA, length(y)*length(x), length(estats))  # just for a single estimation period
+  # prettify
+  colnames(table_paper) <- estats
+  names_inflation <- rep(y, each=length(x))
+  names_models <- rep(x, length(y))
+  rownames(table_paper) <- paste(names_inflation, names_models, sep=' | ')
+  
+  # adding values
+  for (p in 1:length(estats)) {
+    table_paper[,p] <- values_estats[[p]]
+  }
+  
+  return(table_paper)
+}
+
 # ---
 # Run ----
 # ---
@@ -146,22 +165,19 @@ for (y in all_y) {
   }
 }
 
-# storing data for table
-rmse_phillips <- matrix(NA, length(x_phillips), length(all_y))  # then we just complete and the order of completetion first run by rows then by columns
-n_values <- length(all_y)*length(x_phillips)
-# prettify
-colnames(rmse_phillips) <- all_y
-rownames(rmse_phillips) <- x_phillips
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_phillips))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_ols <- create_table_inflation_models(values_estats, all_y, x_phillips)
 
-# note: order is important here, since we do first in the collumn (y) direction, then in the row (x) direction
-rmse_phillips[1:n_values] <- rmse
-# operation collumn-wise
-rmse_phillips_relative <- sweep(rmse_phillips, 2, arma11_rmse, "/")
 
 # ---
 # now do it for models with double x's
 # ---
 doublex_phillips <- list(c('gap1', 'lshr'), c('gap2', 'lshr'))
+x_names <- sapply(doublex_phillips, function(x) paste(x, collapse=' + '))
+x_now <- doublex_phillips
 rmse <- c()
 lambda_phillips <- c()
 hh_se_phillips <- c()
@@ -169,7 +185,7 @@ nw_se_phillips <- c()
 # loop
 for (y in all_y) {
   print(y)
-  for (x in doublex_phillips) {
+  for (x in x_now) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
@@ -181,7 +197,7 @@ for (y in all_y) {
     
     # todo: store the arma11 rmse from previous exercise
     # compute (relative) rmse
-    rmse <- c(rmse_doublex, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
     reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
@@ -194,17 +210,109 @@ for (y in all_y) {
   }
 }
 
-
-
-
-#
-print(rmse_phillips_relative)
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_names))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_ols_2x <- create_table_inflation_models(values_estats, all_y, x_names)
+print(table_ols_2x)
 
 # ---
 ## Term Structure ----
 # ---
 
 # basically the same as before, plus rate
+
+all_y <- df_phillips %>% select(starts_with('inflation')) %>% colnames()  # "inflation_punew" "inflation_puxhs" "inflation_puxx"  "inflation_pce"
+x_phillips <- df_phillips %>% select(gdpg:fac) %>% colnames()  # "gdpg"            "gap1"            "gap2"            "unrate"          "lshr"            "xli"             "xli2"            "fac"
+x_with_rate <- lapply(x_phillips, function(x) c(x, "rate"))
+x_names <- sapply(x_with_rate, function(x) paste(x, collapse=' + '))
+x_now <- x_with_rate
+
+# two loops, one for the dependent variable, other for the independent variable
+rmse <- c()
+lambda_phillips <- c()
+hh_se_phillips <- c()
+nw_se_phillips <- c()
+for (y in all_y) {
+  print(y)
+  for (x in x_now) {
+    print(x)
+    # define all the dataframes relevant
+    df_lag <- lag_df(df_phillips, y, x)
+    train_data <- df_lag %>% filter(group <= 1985)
+    test_data <- df_lag %>% filter(group > 1985)
+    
+    # get forecast
+    forecast_values <- ols_predict(train_data, test_data, y, x)
+    
+    # todo: store the arma11 rmse from previous exercise
+    # compute (relative) rmse
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
+    
+    # compute 1-lambda
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    model_lambda <- lm(reg_formula_lambda, data=test_data)
+    lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
+    # standard-error first with HH-error
+    hh_se_phillips <- c(hh_se_phillips ,kernHAC(model_lambda, kernel = "Truncated")[3,3])
+    # then with NW-error
+    nw_se_phillips <- c(nw_se_phillips, NeweyWest(model_lambda)[3,3])
+  }
+}
+
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_names))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_term_structure <- create_table_inflation_models(values_estats, all_y, x_names)
+print(table_term_structure)
+
+# ---
+# now do it for some other specific
+# ---
+term_structure_x_specific <- list(c('yield'), c('rate', 'yield'), c('gdpg', 'rate', 'yield'))
+x_names <- sapply(term_structure_x_specific, function(x) paste(x, collapse=' + '))
+x_now <- term_structure_x_specific
+rmse <- c()
+lambda_phillips <- c()
+hh_se_phillips <- c()
+nw_se_phillips <- c()
+# loop
+for (y in all_y) {
+  print(y)
+  for (x in x_now) {
+    print(x)
+    # define all the dataframes relevant
+    df_lag <- lag_df(df_phillips, y, x)
+    train_data <- df_lag %>% filter(group <= 1985)
+    test_data <- df_lag %>% filter(group > 1985)
+    
+    # get forecast
+    forecast_values <- ols_predict(train_data, test_data, y, x)
+    
+    # todo: store the arma11 rmse from previous exercise
+    # compute (relative) rmse
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
+    
+    # compute 1-lambda
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    model_lambda <- lm(reg_formula_lambda, data=test_data)
+    lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
+    # standard-error first with HH-error
+    hh_se_phillips <- c(hh_se_phillips ,kernHAC(model_lambda, kernel = "Truncated")[3,3])
+    # then with NW-error
+    nw_se_phillips <- c(nw_se_phillips, NeweyWest(model_lambda)[3,3])
+  }
+}
+
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_names))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_term_structure_specific <- create_table_inflation_models(values_estats, all_y, x_names)
+print(table_term_structure_specific)
+
 
 
 # ---
