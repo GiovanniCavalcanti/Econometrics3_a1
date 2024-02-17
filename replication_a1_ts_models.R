@@ -206,9 +206,10 @@ print(table_ts_1995)
 # BRAZIL ----
 # ---
 
+# test this part
+
 # load data
-df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv') %>% 
-  mutate(group = year(ref.date))
+df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv')
 
 # new series!
 inflation_series <- c('ipca', 'ipca_15', 'exfe')

@@ -200,7 +200,6 @@ for (y in all_y) {
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
     
-    # todo: store the arma11 rmse from previous exercise
     # compute (relative) rmse
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
@@ -318,6 +317,28 @@ values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phil
 table_term_structure_specific <- create_table_inflation_models(values_estats, all_y, x_names)
 print(table_term_structure_specific)
 
+
+# ---
+# BRAZIL ----
+# ---
+
+# todo: end this part
+
+# load data
+df_inflation_brazil <- read.csv("brazil_data/df_inflation_brazil.csv")
+df_realmeasures_brazil <- read.csv("brazil_real_measures_data/df_realmeasures_brazil.csv")
+
+# Prepare data
+df_phillips_brazil <- df_inflation_brazil %>%
+  left_join(df_realmeasures_brazil) %>% 
+  tibble() %>%
+  arrange(FirstDate)
+
+# new definitions
+all_y <- c('ipca', 'ipca_15', 'exfe')
+x_brazil <- c("gdpg", "gap1", "gap2", "unrate", "lshr")
+
+# the loops...
 
 # # ---
 # # Test section  ----
