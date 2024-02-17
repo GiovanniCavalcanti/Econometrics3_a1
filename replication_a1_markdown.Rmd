@@ -1158,7 +1158,20 @@ print(table_term_structure_specific)
 Describe data processing
 
 
-Repeat all models for brazilian data
+Repeat all models for Brazilian data.
+
+### Time-Series Models
+
+```{r ts_brazil}
+
+```
+
+
+### OLS: Phillips Curve + Term Structure Models
+
+```{r phillips_term-structure_brazil}
+
+```
 
 ## Critical part
 
