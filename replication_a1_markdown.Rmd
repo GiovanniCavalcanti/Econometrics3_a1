@@ -551,20 +551,74 @@ best_arma_order <- function(series, ar_until = 10, ma_order = 0, info_criteria =
 # running the functions
 inflation_series <- df_inflation_authors %>% select(starts_with('inflation')) %>% colnames()
 
+# loops
+
 # defining vectors to store data
-arma11_rmse <- c()
+arma11_rmse1985 <- c()
 arp_rmse <- c()
-arma11_forecasts <- list()
-# loop
+arma11_forecasts1985 <- list()
+
+# 1985
 for (x in 1:length(inflation_series)) {
   print(inflation_series[x])
   # first the simple rmse values for each inflation series
-  arma11_rmse[x] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x])
+  arma11_rmse1985[x] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x])
   arp_rmse[x] <- rolling_forecast_ar_p(df_inflation_authors, inflation_series[x])
   
   # we need also the forecasts of the arma11 model to run the lambda models
-  arma11_forecasts[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x], return_rmse = F)
+  arma11_forecasts1985[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x], return_rmse = F)
 }
+
+# printing info
+arma11_rmse <- arma11_rmse1985
+#
+# a loop to get values in the way the table is constructed in the paper
+just_rmse <- c()
+relative_rmse <- c()
+for (x in 1:length(arma11_rmse)) {
+  just_rmse <- c(just_rmse, arma11_rmse[x], arp_rmse[x])
+  relative_rmse_aux <- c(arma11_rmse[x], arp_rmse[x])
+  relative_rmse <- c(relative_rmse, relative_rmse_aux)
+}
+values_estats <- list(just_rmse, relative_rmse)
+table_ts <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
+print(table_ts)
+
+# ---
+# again for a new year
+# ---
+
+# todo: add option to pick the values 
+
+arma11_rmse1995 <- c()
+arp_rmse <- c()
+arma11_forecasts1995 <- list()
+
+# 1995
+for (x in 1:length(inflation_series)) {
+  print(inflation_series[x])
+  # first the simple rmse values for each inflation series
+  arma11_rmse1995[x] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x], initial_end = 1995)
+  arp_rmse[x] <- rolling_forecast_ar_p(df_inflation_authors, inflation_series[x])
+  
+  # we need also the forecasts of the arma11 model to run the lambda models
+  arma11_forecasts1995[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_authors, inflation_series[x], return_rmse = F, initial_end = 1995)
+}
+
+# printing info
+arma11_rmse <- arma11_rmse1995
+#
+# a loop to get values in the way the table is constructed in the paper
+just_rmse <- c()
+relative_rmse <- c()
+for (x in 1:length(arma11_rmse)) {
+  just_rmse <- c(just_rmse, arma11_rmse[x], arp_rmse[x])
+  relative_rmse_aux <- c(arma11_rmse[x], arp_rmse[x])
+  relative_rmse <- c(relative_rmse, relative_rmse_aux)
+}
+values_estats <- list(just_rmse, relative_rmse)
+table_ts_1995 <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
+print(table_ts_1995)
 
 ```
 
@@ -698,6 +752,11 @@ create_table_inflation_models <- function(values_estats, y, x, estats=c('relativ
 # Run ----
 # ---
 
+# change here to change periods (either 1985 or 1995 yet)
+initial_estimation_period <- 1985
+arma11_rmse <- arma11_rmse1985
+arma11_forecasts <- arma11_forecasts1985
+
 # ---
 ## Phillips models ----
 # ---
@@ -718,8 +777,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1995)
-    test_data <- df_lag %>% filter(group > 1995)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -763,8 +822,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1995)
-    test_data <- df_lag %>% filter(group > 1995)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -814,8 +873,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1995)
-    test_data <- df_lag %>% filter(group > 1995)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -859,8 +918,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1995)
-    test_data <- df_lag %>% filter(group > 1995)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -897,6 +956,11 @@ Now for 1995.
 # Run ----
 # ---
 
+# change here to change periods (either 1985 or 1995 yet)
+initial_estimation_period <- 1995
+arma11_rmse <- arma11_rmse1995
+arma11_forecasts <- arma11_forecasts1995
+
 # ---
 ## Phillips models ----
 # ---
@@ -917,8 +981,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -962,8 +1026,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -1013,8 +1077,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -1058,8 +1122,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)

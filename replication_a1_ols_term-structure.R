@@ -124,6 +124,11 @@ create_table_inflation_models <- function(values_estats, y, x, estats=c('relativ
 # Run ----
 # ---
 
+# change here to change periods (either 1985 or 1995 yet)
+initial_estimation_period <- 1995
+arma11_rmse <- arma11_rmse1995
+arma11_forecasts <- arma11_forecasts1995
+
 # ---
 ## Phillips models ----
 # ---
@@ -144,8 +149,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -189,8 +194,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -240,8 +245,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -285,8 +290,8 @@ for (y in all_y) {
     print(x)
     # define all the dataframes relevant
     df_lag <- lag_df(df_phillips, y, x)
-    train_data <- df_lag %>% filter(group <= 1985)
-    test_data <- df_lag %>% filter(group > 1985)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
     
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
@@ -314,23 +319,24 @@ table_term_structure_specific <- create_table_inflation_models(values_estats, al
 print(table_term_structure_specific)
 
 
-# ---
-# Test section  ----
-# ---
-
-# a similar to the main loop above
-
-y <- 'inflation_punew'
-x <- c('gap1', 'lshr')
-
-# define all the dataframes relevant
-df_lag <- lag_df(df_phillips, y, x)
-train_data <- df_lag %>% filter(group <= 1985)
-test_data <- df_lag %>% filter(group > 1985)
-
-# get forecast
-forecast_values <- ols_predict(train_data, test_data, y, x)
-
-# todo: store the arma11 rmse from previous exercise
-# compute (relative) rmse
-rmse_test <- sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T))
+# # ---
+# # Test section  ----
+# # ---
+# 
+# # a similar to the main loop above
+# 
+# y <- 'inflation_punew'
+# x <- c('gap1', 'lshr')
+# 
+# # define all the dataframes relevant
+# df_lag <- lag_df(df_phillips, y, x)
+# train_data <- df_lag %>% filter(group <= initial_estimation_period)
+# test_data <- df_lag %>% filter(group > initial_estimation_period)
+# 
+# # get forecast
+# forecast_values <- ols_predict(train_data, test_data, y, x)
+# 
+# # todo: store the arma11 rmse from previous exercise
+# # compute (relative) rmse
+# rmse_test <- sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T))
+# rmse_test <- sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T))
