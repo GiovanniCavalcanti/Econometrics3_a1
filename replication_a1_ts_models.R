@@ -3,7 +3,7 @@
 # Limpar o ambiente de trabalho
 rm(list = ls()) 
 
-# Carreggar pacotes necessários
+# Carregar pacotes necessários
 library(tidyverse)
 library(dplyr)
 library(quantmod)
@@ -201,6 +201,47 @@ for (x in 1:length(arma11_rmse)) {
 values_estats <- list(just_rmse, relative_rmse)
 table_ts_1995 <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
 print(table_ts_1995)
+
+# ---
+# BRAZIL ----
+# ---
+
+# load data
+df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv') %>% 
+  mutate(group = year(ref.date))
+
+# new series!
+inflation_series <- c('ipca', 'ipca_15', 'exfe')
+
+# values to store
+arma11_rmse_brazil <- c()
+arp_rmse_brazil <- c()
+arma11_forecasts_brazil <- list()
+# same models as previously
+for (x in 1:length(inflation_series)) {
+  print(inflation_series[x])
+  # first the simple rmse values for each inflation series
+  arma11_rmse_brazil[x] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], initial_end = 2010)
+  arp_rmse_brazil[x] <- rolling_forecast_ar_p(df_inflation_brazil, inflation_series[x])
+  
+  # we need also the forecasts of the arma11 model to run the lambda models
+  arma11_forecasts_brazil[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], return_rmse = F, initial_end = 2010)
+}
+
+# printing info
+arma11_rmse <- arma11_rmse_brazil
+#
+# a loop to get values in the way the table is constructed in the paper
+just_rmse <- c()
+relative_rmse <- c()
+for (x in 1:length(arma11_rmse)) {
+  just_rmse <- c(just_rmse, arma11_rmse[x], arp_rmse_brazil[x])
+  relative_rmse_aux <- c(arma11_rmse[x], arp_rmse_brazil[x])
+  relative_rmse <- c(relative_rmse, relative_rmse_aux)
+}
+values_estats <- list(just_rmse, relative_rmse)
+table_ts_brazil <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
+print(table_ts_brazil)
 
 # --- 
 # Test section ----
