@@ -39,7 +39,7 @@ df_inflation_brazil <- df %>%
 # 02 Load and adjust real economic measures ------------------------------------
 
 # Define IDs for GDP growth, two unemployment measures, and labor participation.
-my.id <- c('gdpg' = 7326, 'unemp_desat' = 1620, 'unemp_pnad' = 24369, "lbr_part" = 28544)
+my.id <- c('gdp' = 4380, 'unemp_desat' = 1620, 'unemp_pnad' = 24369, "lbr_part" = 28544)
 # Fetch and process real measures data similar to inflation data.
 df <- gbcbd_get_series(my.id, cache.path = tempdir(),
                        first.date = Sys.Date() - 30 * 365,
@@ -72,22 +72,61 @@ desemprego_pme_descontinuado <- desemprego_pme_descontinuado %>%
 df_realmeasures_brazil <- df_realmeasures_brazil%>%
   left_join(desemprego_pme_descontinuado) %>%
   mutate(unrate = coalesce(unemp_desat, unemp_pnad, unrate)) %>%
-  select(FirstDate, gdpg, unrate, lbr_part) %>%
+  select(FirstDate, gdp, unrate, lbr_part) %>%
   mutate(quarter = as.yearqtr(FirstDate),
-         group = year(FirstDate))
+         group = year(FirstDate)) %>%
+  mutate(gdp_lag = lag(gdp, n=1), 
+         gdpg = log(gdp / gdp_lag)) %>%
+  mutate(gap1 = log(lag(gdp, n =1))^2) %>%
+  mutate(lshr = lbr_part/gdp)
+
+library(hpfilter) # implements the modified filter for gap2
+
+gap2 <-  df_realmeasures_brazil%>%
+  select(gdp)
+
+filter <- hp1(gap2, lambda = 1600)
+
+gap2 <- df_realmeasures_brazil %>%
+  select(FirstDate, gdp)
+
+gap2$gap_2 <- filter
+
+df_gap2_complete <- gap2 %>%
+  select("FirstDate" = as.character("FirstDate"), "gap2" = "gap_2") %>%
+  unnest(gap2) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         gap2 = gdp,
+         quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(!gdp)
+
+rm(gap2, filter)
+
+df_realmeasures_brazil <- df_realmeasures_brazil %>%
+  left_join(df_gap2_complete) 
+
+df_realmeasures_brazil <- df_realmeasures_brazil %>%
+  arrange(FirstDate) %>%
+  select(FirstDate, gdpg, gap1, gap2, unrate, lshr, quarter, group) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
 
 # 03 Load and adjust FOCUS surveys ---------------------------------------------
 
 # Define the economic indicators of interest.
-indic <- c("IPCA", "IGP-DI", "IGP-M", "INPC")
+indic <- c("IPCA", "IPCA-15", "IPCA Alimentação no domicílio")
 # Fetch survey data for the defined indicators.
 df_surveys_brazil <- get_annual_market_expectations(indic) %>%
   select(indic, FirstDate = date, reference_date, median) %>%
   pivot_wider(names_from = indic, values_from = median, names_prefix = "indic_", values_fn = mean) %>%
   filter(reference_date == year(FirstDate) + 1) %>%
-  filter(day(FirstDate) == 1 & # Filter for surveys taken on the first day of the month
-           month(FirstDate) %in% c(1, 4, 7, 10)) # and in January, April, July, or October.
-
+  filter(month(FirstDate) %in% c(1, 4, 7, 10)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
 
 # 04 save the results as csv files on the appropriate folder --------------------
 
