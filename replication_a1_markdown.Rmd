@@ -1,6 +1,6 @@
 ---
 title: "Replication Econometrics III -- A1"
-author: "Calebe Piacentini and Giovanni"
+author: "Calebe Piacentini and Giovanni Cavalcanti"
 date: "2024-01-25"
 output: html_document
 ---
