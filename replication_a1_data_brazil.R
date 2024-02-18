@@ -33,7 +33,11 @@ df <- gbcbd_get_series(my.id, cache.path = tempdir(),
 # Process the fetched data into a cleaner format.
 df_inflation_brazil <- df %>%
   select(!id.num) %>%
-  pivot_wider(names_from = series.name, values_from = value)
+  pivot_wider(names_from = series.name, values_from = value) %>%
+  mutate(quarter = as.yearqtr(ref.date), group = year(ref.date)) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
 
 # 02 Load and adjust real economic measures ------------------------------------
 
