@@ -5,6 +5,16 @@ date: "2024-01-25"
 output: html_document
 ---
 
+All the code available to this project can be found in the github link below:
+
+[https://github.com/GiovanniCavalcanti/Econometrics3_a1]
+
+## What do we need to replicate?
+
+As exposed in the guidelines, we need to replicate all tables and figures **except** for the parts involving models RGM, VAR, RGMVAR, MDL1 and MDL2.
+
+Altering table 2 from the paper to exclude these models, we have:
+
 ```{r setup, include=FALSE}
 rm(list = ls())
 knitr::opts_chunk$set(echo = TRUE)
@@ -21,11 +31,6 @@ library(kableExtra)
 library(sandwich)
 ```
 
-## What do we need to replicate?
-
-As exposed in the guidelines, we need to replicate all tables and figures **except** for the parts involving models RGM, VAR, RGMVAR, MDL1 and MDL2.
-
-Altering table 2 from the paper to exclude these models, we have:
 
 ```{r models, echo=FALSE}
 # Create the data frame
@@ -227,14 +232,627 @@ We take the Michigan survey data from the St. Louis Federal Reserve FRED databas
 
 We'll do the following procedure: first we gather data into the environment, save it to new files and, and given the necessity, reload them in each new chunk.
 
-```{r, include=FALSE}
-source("replication_a1_data-only.R")
+```{r}
+# 00 Packages and environment -----------------------
+
+# Limpar o ambiente de trabalho
+rm(list = ls()) 
+
+# Carreggar pacotes necessários
+library(tidyverse)
+library(dplyr)
+library(quantmod)
+library(forecast)
+library(lubridate)
+library(gt)
+library(tibble)
+library(knitr)
+library(kableExtra)
+library(readxl)
+
+# 01 Load and adjust inflation data -----------------------
+
+# function to process inflation data
+# file_path = file_path, ex: "~/data/punew_1947-2023.csv"
+# inflation_label = series_name, ex: "inflation_punew"
+
+process_inflation_data <- function(file_path, inflation_label, period_column = "Period", label_column = "Label", value_column = "Value") {
+  df <- read_csv(file_path) %>%
+    select(Period = period_column, Label = label_column, P = value_column) %>%
+    mutate(
+      DATE = dmy(paste("01", substr(Period, 2, 3), substr(Label, 1, 4), sep = "-")), # Generate DATE column early to use for arrangement
+      P_lag = lag(P, n =3), # Create a lagged version of the price column
+      !!inflation_label := log(P / P_lag) # Dynamically name the inflation column
+    ) %>%
+    na.omit() %>%
+    arrange(DATE) %>%
+    mutate(Quarter = paste(year(DATE), quarter(DATE), sep = "-Q")) %>%
+    group_by(Quarter) %>%
+    summarise(
+      FirstDate = first(DATE),
+      FirstP = first(P),
+      FirstP_lag = first(P_lag),
+      !!inflation_label := first(!!sym(inflation_label))
+    ) %>%
+    select(Quarter, FirstDate, FirstP, FirstP_lag, !!inflation_label)
+}
+
+# Process each dataset
+punew_df <- process_inflation_data("data/input/inflation_data/punew_1947-2023.csv", "inflation_punew")
+puxhs_df <- process_inflation_data("data/input/inflation_data/puxhs_1947-2023.csv", "inflation_puxhs")
+puxx_df <- process_inflation_data("data/input/inflation_data/puxx_1957-2023.csv", "inflation_puxx")
+
+rm(process_inflation_data)
+
+pce_df <- read_csv("data/input/inflation_data/pce_DPCERD3Q086SBEA_1947-2023.csv") %>%
+  rename(P = "DPCERD3Q086SBEA") %>%
+  mutate(
+    P_lag = lag(P),
+    inflation_pce = log(P / P_lag),
+    FirstDate = DATE
+  ) %>%
+  na.omit()
+
+
+# Merge all dataframes on the FirstDate column
+df_inflation_complete <- reduce(list(punew_df, puxhs_df, puxx_df, pce_df), full_join, by = "FirstDate") %>%
+  select("FirstDate", contains("inflation")) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  mutate(group = year(FirstDate))
+
+# calebe: thank you for noting this!
+##___________________________________________________________________##
+#   Save the df_inflation_complete as df_inflation_complete.csv.      
+#   This is the the complete inflation panel!                           
+##___________________________________________________________________##
+# write.csv(df_inflation_complete, file = "df_inflation_complete.csv")
+
+rm(pce_df, punew_df, puxhs_df, puxx_df)
+
+# Now, we aggregate inflation by year.
+
+punew_year <- df_inflation_complete %>%
+  mutate(punew_year = inflation_punew + lag(inflation_punew, 1) +
+           lag(inflation_punew, 2) + lag(inflation_punew, 3)) %>%
+  select(!contains("inflation"))
+puxhs_year <- df_inflation_complete %>%
+  mutate(puxhs_year = inflation_puxhs + lag(inflation_puxhs, 1) +
+           lag(inflation_puxhs, 2) + lag(inflation_puxhs, 3)) %>%
+  select(!contains("inflation"))
+puxx_year <- df_inflation_complete %>%
+  mutate(puxx_year = inflation_puxx + lag(inflation_puxx, 1) +
+           lag(inflation_puxx, 2) + lag(inflation_puxx, 3)) %>%
+  select(!contains("inflation"))
+pce_year <- df_inflation_complete %>%
+  mutate(pce_year = inflation_pce + lag(inflation_pce, 1) +
+           lag(inflation_pce, 2) + lag(inflation_pce, 3)) %>%
+  select(!contains("inflation"))
+
+df_inflation_complete_yearly <- full_join(punew_year, puxhs_year ) %>%
+  full_join(., puxx_year ) %>%
+  full_join(., pce_year ) 
+
+##____________________________________________________________________________##
+#   df_inflation_complete_yearly is the yearly aggregated inflation     
+#   This is the complete yearly inflation panel  
+##____________________________________________________________________________##
+# write.csv(df_inflation_complete_yearly, file = "df_inflation_complete_yearly.csv")
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+## 02.0 Recreate Authors' inflation panel -------------------------------------------
+
+##______________________________________________________________________________##
+# To recreate Authors' inflation panel, it requires to filter the dates accordingly
+# Their sample period is:
+#- 1952:Q2–2002:Q4 for PUNEW and PUXHS,
+#- 1958:Q2–2002:Q4 for PUXX,
+#- 1960:Q2–2002:Q4 for PCE
+##______________________________________________________________________________##
+
+# Filter the data based on the specified date ranges for each series
+punew_puxhs_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_punew", "inflation_puxhs", "quarter")
+puxx_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1958-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_puxx", "quarter")
+pce_filter <- filter(df_inflation_complete, FirstDate >= as.Date("1960-04-01") & FirstDate <= as.Date("2002-10-01")) %>%
+  select("FirstDate", "inflation_pce", "quarter")
+
+# Now, join those dataframes
+df_inflation_authors <- full_join(punew_puxhs_filter, puxx_filter, by = "FirstDate") %>%
+  full_join(., pce_filter, by = "FirstDate")  %>%
+  mutate(group = year(FirstDate)) %>%
+  select("FirstDate", "inflation_punew", "inflation_puxhs", "inflation_puxx", "inflation_pce", "quarter" = "quarter.x", "group") 
+
+##____________________________________________________________________________##
+#   Save the df_inflation_authors as original_inflation_panel.csv.  
+#   This is the the authors' original inflation panel        
+##____________________________________________________________________________##
+# write.csv(df_inflation_authors, file = "df_inflation_authors.csv")
+
+# Now, we agregate inflation by year.
+
+punew_year <- df_inflation_authors %>%
+  mutate(punew_year = inflation_punew + lag(inflation_punew, 1) +
+           lag(inflation_punew, 2) + lag(inflation_punew, 3)) %>%
+  select(!contains("inflation"))
+puxhs_year <- df_inflation_complete %>%
+  mutate(puxhs_year = inflation_puxhs + lag(inflation_puxhs, 1) +
+           lag(inflation_puxhs, 2) + lag(inflation_puxhs, 3)) %>%
+  select(!contains("inflation"))
+puxx_year <- df_inflation_complete %>%
+  mutate(puxx_year = inflation_puxx + lag(inflation_puxx, 1) +
+           lag(inflation_puxx, 2) + lag(inflation_puxx, 3)) %>%
+  select(!contains("inflation"))
+pce_year <- df_inflation_complete %>%
+  mutate(pce_year = inflation_pce + lag(inflation_pce, 1) +
+           lag(inflation_pce, 2) + lag(inflation_pce, 3)) %>%
+  select(!contains("inflation"))
+
+df_inflation_authors_yearly <- full_join(punew_year, puxhs_year ) %>%
+  full_join(., puxx_year ) %>%
+  full_join(., pce_year ) 
+##____________________________________________________________________________##
+#   df_inflation_authors_yearly is the yearly aggregated inflation     
+#   This is the the authors' original yearly inflation panel  
+##____________________________________________________________________________##
+# write.csv(df_inflation_authors_yearly, file = "df_inflation_authors_yearly.csv")
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+
+# 02 Load and adjust real activities measures ----------------------------------
+
+## gdpg dataframe
+df_gdp_complete <- read_csv("data/input/real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(gdp_lag = lag(gdp, n=1), 
+         gdpg = log(gdp / gdp_lag), 
+         group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  select("FirstDate", "gdpg", "group") %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  na.omit()
+
+## gap1 dataframe ((quadratic) detrended log GDP as a measure of the output gap last period)
+df_gap1_complete <- read.csv("data/input/real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1") %>%
+  mutate(FirstDate = as.Date(FirstDate)) %>%
+  mutate(quarter = as.yearqtr(FirstDate), 
+         gap1 = log(lag(gdp, n =1))^2,
+         group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  select("FirstDate", "gap1", "quarter", "group") %>%
+  na.omit()
+
+## gap2 dataframe
+
+library(hpfilter) # implements the modified filter for gap2
+
+gap2 <- read_csv("data/input/real_measures_data/gdp.csv") %>%
+  select("gdp" = "GDPC1") 
+
+filter <- hp1(gap2, lambda = 1600)
+
+gap2 <- read.csv("data/input/real_measures_data/gdp.csv") %>%
+  select("FirstDate" = "DATE", "gdp" = "GDPC1")
+
+gap2$gap_2 <- filter
+
+df_gap2_complete <- gap2 %>%
+  select("FirstDate" = as.character("FirstDate"), "gap2" = "gap_2") %>%
+  unnest(gap2) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         gap2 = gdp,
+         quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(!gdp)
+
+rm(gap2, filter)
+
+## li/lix dataframes
+
+a <- readLines("data/input/real_measures_data/experimental_leading_indexes/xindex.ASC", skip = 10)
+a <- a[11:550]
+
+
+str_split(a[50], "\\s+")
+
+year <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  year[x] <- line_split[[1]][2]
+}
+
+xli <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  xli[x] <- line_split[[1]][4]
+}
+
+xli2 <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  xli2[x] <- line_split[[1]][8]
+}
+
+teste <- data.frame(year, xli, xli2)
+
+df_experimentalindex_complete <- teste[-1,]
+
+df_experimentalindex_complete <- df_experimentalindex_complete %>% 
+  mutate(FirstDate = dmy(paste("01", substr(year, 6, 7), substr(year, 1, 4), sep = "-")),
+         xli = as.numeric(xli),
+         xli2 = as.numeric(xli2)) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, xli, xli2, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    xli = first(xli),
+    xli2 = first(xli2),
+    group = first(group)
+    )
+
+rm(teste, line_split, a, x)
+
+## fac dataframe
+
+a <- readLines("data/input/real_measures_data/factor.txt")
+a <- a[3:513]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1959-02-01"), to = as.Date("2001-08-01"), by = "month")
+
+# Create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_fac_complete <- bind_cols(teste, df_months) %>%
+  mutate(fac = as.numeric.factor.) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, fac, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    fac = first(fac),
+    group = first(group)
+  )
+
+## unemployment  dataframe
+df_unemp_complete <- read.csv("data/input/real_measures_data/unemp.csv") %>%
+  arrange(DATE) %>%
+  mutate(DATE = as.Date(DATE)) %>%
+  mutate(Quarter = as.yearqtr(DATE)) %>%
+  group_by(Quarter) %>%
+  summarise(
+    FirstDate = first(DATE),
+    UNRATE = first(UNRATE)) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         group = year(FirstDate)) %>%
+  select("FirstDate", "unrate" = "UNRATE", "quarter" = "Quarter", "group")
+
+## labor share dataframe
+df_lshr_complete <- read.csv("data/input/real_measures_data/lshr.csv") %>%
+  select("FirstDate" = "DATE", "lshr" = "PRS85006173") %>%
+  mutate(group = year(FirstDate),
+         FirstDate = as.Date(FirstDate)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  select("FirstDate", "lshr", "quarter", "group")
+
+rm(x, xli, xli2, year, a, date_sequence, teste, df_months, factor, line_split)
+
+##fb_rate dataframe 
+
+a <- readLines("data/input/real_measures_data/FBrate.txt")
+a <- a[3:609]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1952-07-01"), to = as.Date("2003-01-01"), by = "month")
+
+# Create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_rate_complete <- bind_cols(teste, df_months) %>%
+  mutate(rate = as.numeric.factor.) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, rate, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    rate = first(rate),
+    group = first(group)
+  )
+
+##fb_yield dataframe 
+
+a <- readLines("data/input/real_measures_data/FByield.txt")
+a <- a[3:609]
+
+factor <- c()
+
+for (x in 1:length(a)) {
+  line_split <- str_split(a[x], "\\s+")
+  
+  factor[x] <- line_split[[1]][2]
+}
+
+teste <- data.frame(as.numeric(factor)) 
+
+# Generate the sequence of dates by month
+date_sequence <- seq.Date(from = as.Date("1952-07-01"), to = as.Date("2003-01-01"), by = "month")
+
+# Create a data frame with this date sequence as a column
+df_months <- data.frame(FirstDate = date_sequence)
+
+df_yield_complete <- bind_cols(teste, df_months) %>%
+  mutate(yield = as.numeric.factor.) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(FirstDate, yield, quarter, group) %>%
+  group_by(quarter) %>%
+  summarise(
+    FirstDate = first(FirstDate), 
+    yield = first(yield),
+    group = first(group)
+  )
+
+## join all dataframees
+df_realmeasures_complete <- full_join(df_gdp_complete, df_unemp_complete, ) %>%
+  full_join(., df_lshr_complete) %>%
+  full_join(., df_gap1_complete) %>%
+  full_join(., df_gap2_complete) %>%
+  full_join(., df_experimentalindex_complete) %>%
+  full_join(., df_fac_complete) %>%
+  full_join(., df_rate_complete) %>%
+  full_join(., df_yield_complete) %>%
+  select("FirstDate", "gdpg", "gap1", "gap2", "unrate", "lshr", "xli", "xli2", "fac", "rate", "yield", "quarter", "group")
+
+df_realmeasures_complete <- df_realmeasures_complete[1:(nrow(df_realmeasures_complete) - 2),]
+
+##____________________________________________________________________________##
+#   df_realmeasures_complete is the quarterly real measures data    
+#   This is the complete quarterly real measures data 
+##____________________________________________________________________________##
+# write.csv(df_realmeasures_complete, file = "df_realmeasures_complete.csv")
+
+rm(df_gdp_complete, df_unemp_complete, df_lshr_complete, df_gap1_complete, df_gap2_complete)
+
+## 0.3.0 Recreate Authors' Real measures panel
+
+##______________________________________________________________________________##
+# To recreate Authors' real measures panel, it requires to filter the dates accordingly
+# Their sample period is:
+#- 1952:Q2–2001:Q4 for all the real activity measures, except
+#- 1959:Q1–2001:Q3 for Bernanke–Boivin–Eliasz real activity factor
+##______________________________________________________________________________##
+
+df_realmeasures_authors <- filter(df_realmeasures_complete, FirstDate >= as.Date("1952-04-01") & FirstDate <= as.Date("2001-10-01")) 
+
+##____________________________________________________________________________##
+#   df_realmeasures_authors is the quarterly real measures data    
+#   This is the Authors' quarterly real measures data 
+##____________________________________________________________________________##
+# write.csv(df_realmeasures_authors, file = "df_realmeasures_authors.csv")
+
+# 03 Load and adjust survey measures -------------------------------------
+
+# Load survey data from Excel, adjust CPI calculations, and resample bi-quarterly
+df_livingston_complete <- read_excel('data/input/survey_data/livingston_survey.xlsx', sheet = 'CPI', na = "#N/A") %>%
+  mutate(
+    liv_year = if_else(is.na(CPI_12M), NA_real_, (log(CPI_12M) - log(CPI_BP)) * 100),
+    Date = as.Date(Date),
+    quarter = as.yearqtr(Date),
+    group = year(Date)
+  ) %>%
+  select(quarter, group, liv_year)
+
+# Load and adjust SPF survey data
+df_spf_complete <- read_excel("data/input/survey_data/spf_survey.xlsx", na = "#N/A") %>%
+  select(year = YEAR, quarter = QUARTER, CPIB) %>%
+  unite("quarter", year:quarter, sep = " Q") %>%
+  mutate(quarter = as.yearqtr(quarter)) %>%
+  rename(spf_year = CPIB)
+
+# Load and adjust Michigan survey data, resample annually
+df_michigan_complete <- read.csv("data/input/survey_data/michigan_survey_inflation.csv") %>%
+  rename(date = DATE) %>%
+  mutate(
+    date = as.Date(date),
+    quarter = as.yearqtr(date)) %>%
+  group_by(quarter = as.yearqtr(date - months(12))) %>% # Shift by 4 quarters (1 year) directly
+  summarise(mich_year = mean(MICH, na.rm = TRUE), .groups = 'drop')
+
+df_surveys_complete <- full_join(df_livingston_complete, df_michigan_complete) %>%
+  full_join(df_spf_complete) %>%
+  mutate(group = year(quarter)) %>%
+  arrange(quarter)
+
+# Save all created dataframes as csv
+write.csv(df_experimentalindex_complete, file = "data/output/df_experimentalindex_complete.csv")
+write.csv(df_fac_complete, file = "data/output/df_fac_complete.csv")
+write.csv(df_inflation_authors, file = "data/output/df_inflation_authors.csv")
+write.csv(df_inflation_authors_yearly, file = "data/output/df_inflation_authors_yearly.csv")
+write.csv(df_inflation_complete, file = "data/output/df_inflation_complete.csv")
+write.csv(df_inflation_complete_yearly, file = "data/output/df_inflation_complete_yearly.csv")
+write.csv(df_livingston_complete, file = "data/output/df_livingston_complete.csv")
+write.csv(df_michigan_complete, file = "data/output/df_michigan_complete.csv")
+write.csv(df_realmeasures_authors, file = "data/output/df_realmeasures_authors.csv")
+write.csv(df_experimentalindex_complete, file = "data/output/df_experimentalindex_complete.csv")
+write.csv(df_realmeasures_complete, file = "data/output/df_realmeasures_complete.csv")
+write.csv(df_spf_complete, file = "data/output/df_spf_complete.csv")
+write.csv(df_surveys_complete, file = "data/output/df_surveys_complete.csv")
 ```
 
 And the same for Brazilian data.
 
-```{r, include=FALSE}
-source("replication_a1_data_brazil.R")
+```{r}
+# 01 Environment and packages --------------------------------------------------
+# Clear the workspace to ensure a clean environment for the analysis.
+
+# Load necessary R packages for data manipulation, visualization, and analysis.
+# These libraries provide a wide range of functions for data processing, financial modeling,
+# time series forecasting, working with dates, creating tables, dynamic reporting, and more.
+library(tidyverse)    # Collection of data science packages, including dplyr for data manipulation and ggplot2 for plotting.
+library(dplyr)        # Data manipulation tools for filtering, selecting, and transforming data.
+library(quantmod)     # Tools for quantitative financial modeling and trading strategy development.
+library(forecast)     # Functions for forecasting time series data.
+library(lubridate)    # Simplifies working with dates and times.
+library(gt)           # Enables creation of beautiful and customizable tables.
+library(tibble)       # Provides a modern reimagining of data frames.
+library(knitr)        # Allows for dynamic report generation in R.
+library(kableExtra)   # Enhances knitr::kable() outputs with additional styling and functionality.
+library(readxl)       # Enables reading Excel files directly into R.
+library(GetBCBData)   # Fetches data from the Brazilian Central Bank (BCB).
+library(rbcb)         # Provides access to BCB's web services for economic data.
+
+# 02 Load and adjust inflation data --------------------------------------------
+
+# For retrieving specific series by ID from the Brazilian Central Bank, visit:
+# https://www3.bcb.gov.br/sgspub/localizarseries/localizarSeries.do?method=prepararTelaLocalizarSeries
+# Use the provided link to locate series by their code numbers.
+
+## Extract inflation data
+# Define IDs for the IPCA and EXFE series.
+my.id <- c('ipca' = 433, 'ipca_15' = 7478, 'exfe' = 28751)
+# Fetch series data within a 30-year range from today.
+df <- gbcbd_get_series(my.id, cache.path = tempdir(),
+                       first.date = Sys.Date() - 30 * 365,
+                       last.date = Sys.Date())
+# Process the fetched data into a cleaner format.
+df_inflation_brazil <- df %>%
+  select(!id.num) %>%
+  pivot_wider(names_from = series.name, values_from = value) %>%
+  mutate(quarter = as.yearqtr(ref.date), group = year(ref.date)) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# 02 Load and adjust real economic measures ------------------------------------
+
+# Define IDs for GDP growth, two unemployment measures, and labor participation.
+my.id <- c('gdp' = 4380, 'unemp_desat' = 1620, 'unemp_pnad' = 24369, "lbr_part" = 28544)
+# Fetch and process real measures data similar to inflation data.
+df <- gbcbd_get_series(my.id, cache.path = tempdir(),
+                       first.date = Sys.Date() - 30 * 365,
+                       last.date = Sys.Date())
+df_realmeasures_brazil <- df %>%
+  select(!id.num) %>%
+  pivot_wider(names_from = series.name, values_from = value) %>%
+  rename(FirstDate = ref.date)
+
+# Load the dataset, skipping the first row and excluding the second column
+desemprego_pme_descontinuado <- read_delim("brazil_real_measures_data/desemprego_pme_descontinuado.csv", 
+                                           delim = ";", 
+                                           escape_double = FALSE, 
+                                           col_names = FALSE, 
+                                           trim_ws = TRUE, 
+                                           skip = 1) %>%
+  select(-X2) # Exclude the second column right after loading
+
+desemprego_pme_descontinuado <-as.data.frame(t(as.matrix(desemprego_pme_descontinuado)), header = TRUE) %>%
+  select(V1, V4)
+
+desemprego_pme_descontinuado <- desemprego_pme_descontinuado %>%
+  slice(-1) %>% # Remove the first row which is likely a header or unwanted data
+  mutate(V4 = as.numeric(V4), # Convert V4 to numeric
+         FirstDate = dmy(paste("01", V1)), # Create a FirstDate column assuming the first day of the month
+         quarter = as.yearqtr(FirstDate), # Create a quarter column from FirstDate
+         group = year(FirstDate)) %>% # Create a group column based on the year of FirstDate
+  select(FirstDate, unrate = V4, quarter, group) # Select and rename columns
+
+df_realmeasures_brazil <- df_realmeasures_brazil%>%
+  left_join(desemprego_pme_descontinuado) %>%
+  mutate(unrate = coalesce(unemp_desat, unemp_pnad, unrate)) %>%
+  select(FirstDate, gdp, unrate, lbr_part) %>%
+  mutate(quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  mutate(gdp_lag = lag(gdp, n=1), 
+         gdpg = log(gdp / gdp_lag)) %>%
+  mutate(gap1 = log(lag(gdp, n =1))^2) %>%
+  mutate(lshr = lbr_part/gdp)
+
+library(hpfilter) # implements the modified filter for gap2
+
+gap2 <-  df_realmeasures_brazil%>%
+  select(gdp)
+
+filter <- hp1(gap2, lambda = 1600)
+
+gap2 <- df_realmeasures_brazil %>%
+  select(FirstDate, gdp)
+
+gap2$gap_2 <- filter
+
+df_gap2_complete <- gap2 %>%
+  select("FirstDate" = as.character("FirstDate"), "gap2" = "gap_2") %>%
+  unnest(gap2) %>%
+  mutate(FirstDate = as.Date(FirstDate),
+         gap2 = gdp,
+         quarter = as.yearqtr(FirstDate),
+         group = year(FirstDate)) %>%
+  select(!gdp)
+
+rm(gap2, filter)
+
+df_realmeasures_brazil <- df_realmeasures_brazil %>%
+  left_join(df_gap2_complete) 
+
+df_realmeasures_brazil <- df_realmeasures_brazil %>%
+  arrange(FirstDate) %>%
+  select(FirstDate, gdpg, gap1, gap2, unrate, lshr, quarter, group) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# 03 Load and adjust FOCUS surveys ---------------------------------------------
+
+# Define the economic indicators of interest.
+indic <- c("IPCA", "IPCA-15", "IPCA Alimentação no domicílio")
+# Fetch survey data for the defined indicators.
+df_surveys_brazil <- get_annual_market_expectations(indic) %>%
+  select(indic, FirstDate = date, reference_date, median) %>%
+  pivot_wider(names_from = indic, values_from = median, names_prefix = "indic_", values_fn = mean) %>%
+  filter(reference_date == year(FirstDate) + 1) %>%
+  filter(month(FirstDate) %in% c(1, 4, 7, 10)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  group_by(quarter) %>%
+  filter(row_number() == 1) %>%
+  ungroup()
+
+# 04 save the results as csv files on the appropriate folder --------------------
+
+write.csv(df_inflation_brazil, file = "brazil_data/df_inflation_brazil.csv")
+write.csv(df_realmeasures_brazil, file = "brazil_real_measures_data/df_realmeasures_brazil.csv")
+write.csv(df_surveys_brazil, file = "brazil_survey_data/df_surveys_brazil.csv")
 ```
 
 ## Summary statistics
@@ -243,12 +861,944 @@ Here we replicate table 1 of Summary Statistics from the paper and the following
 
 First, we do it for the exactly the period of their analysis. It's worth noting that although their first year of analysis is 1952, PUXX only starts to have data at 1957 (even though they use data starting from 1958).
 
-```{r}
-source("replication_a1_summary-stats.R")
+```{r replication_a1_summary-stats}
+# missing packages
+
+## 02.1 Recreate table 1 Summary Statistics - original --------------------------
+
+### Panel A --------------------------------------------------
+
+df_inflation_authors <- read_csv('data/output/df_inflation_authors.csv')
+df_inflation_authors_yearly <- read_csv('data/output/df_inflation_authors_yearly.csv')
+data_variables <- select(df_inflation_authors_yearly, ends_with('year'))
+
+# Calculate summary statistics
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# New column to add at the start
+statistics_labels <- c("Mean", "Standard deviation", "Autocorrelation", "Correlations", "PUXHS", "PUXX", "PCE")
+
+# Adding the new column at the start of the dataframe
+panel_a <- panel_a %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+panel_a <- kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+(panel_a)
+
+rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel B -----------------------------------------------
+
+df_inflation_authors_B <- df_inflation_authors %>%
+  filter(FirstDate >= "1986-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_authors_yearly_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_authors_yearly_B, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors_B %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_b <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_b <- panel_b %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel B (latex code)
+panel_b <- kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+(panel_b)
+
+rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel C -----------------------------------------------
+
+df_inflation_authors_C <- df_inflation_authors %>%
+  filter(FirstDate >= "1996-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_authors_yearly_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_authors_yearly_C, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors_C %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_c <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_c <- panel_c %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel C (latex code)
+panel_c <- kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+(panel_c)
+# Clear environment
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
+
+## 02.2 Recreate table 1 Summary Statistics - complete --------------------------
+
+### Panel A --------------------------------------------------
+
+data_variables <- select(df_inflation_complete_yearly, ends_with('year'))
+
+# Calculate summary statistics
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# New column to add at the start
+statistics_labels <- c("Mean", "Standard deviation", "Autocorrelation", "Correlations", "PUXHS", "PUXX", "PCE")
+
+# Adding the new column at the start of the dataframe
+panel_a <- panel_a %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel A: 1947:Q1–2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel B -----------------------------------------------
+
+df_inflation_complete_B <- df_inflation_complete %>%
+  filter(FirstDate >= "1986-01-01" & FirstDate <= "2023-10-01")
+
+punew_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_complete_yearly_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_complete_yearly_B, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete_B %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_b <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_b <- panel_b %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel B (latex code)
+kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel C -----------------------------------------------
+
+df_inflation_complete_C <- df_inflation_complete %>%
+  filter(FirstDate >= "1996-01-01" & FirstDate <= "2023-10-01")
+
+punew_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_complete_yearly_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_complete_yearly_C, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete_C %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_c <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_c <- panel_c %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel C (latex code)
+kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+
+# Clear environment
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearly_B, df_inflation_complete_yearly_C, statistics_labels)
+
+## 04.1 Recreate figure 1.A -----------------------------
+
+# Multiply the inflation columns by 100
+
+data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  mutate(across(ends_with("year"), ~ .x * 100)) %>%
+  full_join(., df_livingston_complete)  %>%
+  filter(group < 2003 & group >1951)
+
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
+shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to line1 types
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1a
+
+rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
+
+## 04.2 Recreate figure 1.B -----------------------------
+
+data_plot1B <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  filter(group >= 1978 & group <= 2002) %>%
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1B_long <- data_plot1B %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "dotted", "dotdash", "longdash")
+shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1B_long$inflation_type)
+names(shapes) <- unique(data_plot1B_long$inflation_type)
+
+# Plot the data
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1B
+
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
+
+## 04.3 Recreate figure 1.A (extended) -----------------------------
+
+# Multiply the inflation columns by 100
+
+data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  mutate(across(ends_with("year"), ~ .x * 100)) %>%
+  full_join(., df_livingston_complete)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
+shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to line1 types
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1a
+
+rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
+
+
+## 04.2 Recreate figure 1.B (extended)-----------------------------
+
+data_plot1B <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1B_long <- data_plot1B %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "dotted", "dotdash", "longdash")
+shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1B_long$inflation_type)
+names(shapes) <- unique(data_plot1B_long$inflation_type)
+
+# Plot the data
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1B
+
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 ```
 
-```{r}
-source("replication_a1_summary-stats_figures.R", local = knitr::knit_global())
+```{r replication_a1_summary-stats_figures}
+
+# missing packages
+
+## 02.1 Recreate table 1 Summary Statistics - original --------------------------
+
+### Panel A --------------------------------------------------
+
+data_variables <- select(df_inflation_authors_yearly, ends_with('year'))
+
+# Calculate summary statistics
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# New column to add at the start
+statistics_labels <- c("Mean", "Standard deviation", "Autocorrelation", "Correlations", "PUXHS", "PUXX", "PCE")
+
+# Adding the new column at the start of the dataframe
+panel_a <- panel_a %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel B -----------------------------------------------
+
+df_inflation_authors_B <- df_inflation_authors %>%
+  filter(FirstDate >= "1986-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_authors_B %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_authors_yearly_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_authors_yearly_B, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors_B %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_b <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_b <- panel_b %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel B (latex code)
+kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel C -----------------------------------------------
+
+df_inflation_authors_C <- df_inflation_authors %>%
+  filter(FirstDate >= "1996-01-01" & FirstDate <= "2002-10-01")
+
+punew_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_authors_C %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_authors_yearly_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_authors_yearly_C, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_authors_C %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_c <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_c <- panel_c %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel C (latex code)
+kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+
+# Clear environment
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)
+
+## 02.2 Recreate table 1 Summary Statistics - complete --------------------------
+
+### Panel A --------------------------------------------------
+
+data_variables <- select(df_inflation_complete_yearly, ends_with('year'))
+
+# Calculate summary statistics
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_a <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# New column to add at the start
+statistics_labels <- c("Mean", "Standard deviation", "Autocorrelation", "Correlations", "PUXHS", "PUXX", "PCE")
+
+# Adding the new column at the start of the dataframe
+panel_a <- panel_a %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel A (latex code)
+kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel A: 1947:Q1–2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel B -----------------------------------------------
+
+df_inflation_complete_B <- df_inflation_complete %>%
+  filter(FirstDate >= "1986-01-01" & FirstDate <= "2023-10-01")
+
+punew_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_complete_B %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_complete_yearly_B <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_complete_yearly_B, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete_B %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_b <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_b <- panel_b %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel B (latex code)
+kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+
+### Panel C -----------------------------------------------
+
+df_inflation_complete_C <- df_inflation_complete %>%
+  filter(FirstDate >= "1996-01-01" & FirstDate <= "2023-10-01")
+
+punew_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(punew_year = sum(inflation_punew, na.rm = TRUE))
+puxhs_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(puxhs_year = sum(inflation_puxhs, na.rm = TRUE))
+puxx_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(puxx_year = sum(inflation_puxx, na.rm = TRUE))
+pce_year <- df_inflation_complete_C %>%
+  group_by(group) %>%
+  summarise(pce_year = sum(inflation_pce, na.rm = TRUE))
+
+df_inflation_complete_yearly_C <- full_join(punew_year, puxhs_year, by = "group") %>%
+  full_join(., puxx_year, by = "group") %>%
+  full_join(., pce_year, by = "group") %>%
+  mutate(across(everything(), ~na_if(.x, 0)))
+
+rm(pce_year, punew_year, puxhs_year, puxx_year)
+
+data_variables <- select(df_inflation_complete_yearly_C, ends_with('year'))
+
+means <- 100*round(colMeans(data_variables, na.rm = T),4)
+sds <- data_variables %>% summarise(across(everything(), ~ 100* sd(., na.rm=T)))
+autocorrelation_quaterly <- df_inflation_complete_C %>% 
+  select(starts_with("inflation")) %>%
+  summarise(across(everything(), ~ cor(., lag(., 4), use='complete.obs'))) %>%
+  select("punew_year" = "inflation_punew", "puxhs_year" = "inflation_puxhs", "puxx_year" = "inflation_puxx", "pce_year" = "inflation_pce")
+corr_table <- round(cor(data_variables, use = 'complete.obs'), 2)
+corr_table[!lower.tri(corr_table)] <- NA
+
+panel_c <- bind_rows(list(means, sds, autocorrelation_quaterly, as.data.frame(corr_table)))
+
+# Adding the new column at the start of the dataframe
+panel_c <- panel_c %>%
+  mutate(Statistic = statistics_labels) %>%
+  select(Statistic, everything()) %>%
+  mutate(across(where(is.numeric), ~ round(., 2)))
+
+# Generate the table 1, panel C (latex code)
+kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+  kable_styling(latex_options = c("striped", "hold_position")) %>%
+  add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2023:Q4" = 4)) %>%
+  pack_rows("Mean", 1, 1) %>%
+  pack_rows("Standard deviation", 2, 2) %>%
+  pack_rows("Autocorrelation", 3, 3) %>%
+  pack_rows("Correlations", 4, 6)
+
+
+# Clear environment
+rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
+rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearly_B, df_inflation_complete_yearly_C, statistics_labels)
+
+## 04.1 Recreate figure 1.A -----------------------------
+
+# Multiply the inflation columns by 100
+
+data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  mutate(across(ends_with("year"), ~ .x * 100)) %>%
+  full_join(., df_livingston_complete)  %>%
+  filter(group < 2003 & group >1951)
+
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
+shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to line1 types
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1a
+
+rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
+
+## 04.2 Recreate figure 1.B -----------------------------
+
+data_plot1B <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  filter(group >= 1978 & group <= 2002) %>%
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1B_long <- data_plot1B %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "dotted", "dotdash", "longdash")
+shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1B_long$inflation_type)
+names(shapes) <- unique(data_plot1B_long$inflation_type)
+
+# Plot the data
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1B
+
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
+
+## 04.3 Recreate figure 1.A (extended) -----------------------------
+
+# Multiply the inflation columns by 100
+
+data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  mutate(across(ends_with("year"), ~ .x * 100)) %>%
+  full_join(., df_livingston_complete)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1A_long <- data_plot1A %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value) %>%
+  arrange(FirstDate)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "longdash", "dotted", "dotdash", NA)
+shapes <- c(NA, NA, NA, NA, 3) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to line1 types
+names(line_types) <- unique(data_plot1A_long$inflation_type)
+names(shapes) <- unique(data_plot1A_long$inflation_type)
+
+# Plot the data
+plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1a
+
+rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
+
+
+## 04.2 Recreate figure 1.B (extended)-----------------------------
+
+data_plot1B <- df_inflation_authors_yearly %>%
+  mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
+  left_join(df_surveys_complete) %>%
+  select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
+
+# Pivot the data to a long format for plotting with ggplot2
+data_plot1B_long <- data_plot1B %>%
+  pivot_longer(cols = ends_with("year"), names_to = "inflation_type", values_to = "inflation_value") %>%
+  select(FirstDate, inflation_type, inflation_value)
+
+# Define linetypes and shapes based on the provided plot image
+line_types <- c("solid", "dotted", "dotdash", "longdash")
+shapes <- c(NA, NA, NA, NA) # Only the 'Livingston' series uses a shape, represented by pluses
+
+# Create a named vector to map the inflation types to linetypes
+names(line_types) <- unique(data_plot1B_long$inflation_type)
+names(shapes) <- unique(data_plot1B_long$inflation_type)
+
+# Plot the data
+plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, color = inflation_type, linetype = inflation_type, shape = inflation_type)) +
+  geom_line() +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("black", "black", "black", "black")) +
+  scale_linetype_manual(values = line_types) +
+  scale_shape_manual(values = shapes) +
+  labs(x = "Year", y = "Percentage", title = "Inflation Over Time") +
+  theme_minimal() +
+  theme(legend.title = element_blank(),
+        legend.position = "top",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+plot_1B
+
+rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
+
 ```
 
 The results of these scripts can been seen by checking the folders 'table' and 'figures' on the github repository. We were unalbe to print their results directly into the markdown file.
@@ -1051,7 +2601,7 @@ print(table_ts_brazil)
 
 ### OLS: Phillips Curve + Term Structure Models
 
-Same periods of analysis as in the previous time-series models.
+Same periods of analysis as in the previous time-series models. There doesn't seem to be a dominant series, but in general they perform better than the ARMA(1,1). Nevertheless, as we saw, AR(p) models are better than the ARMA(1,1) models (different from what we see in the paper).
 
 ```{r phillips_term-structure_brazil}
 # load data
@@ -1118,10 +2668,8 @@ print(table_ols)
 
 ## Critical part
 
-First of all, it would be nice to have a replication package, since this would make verifiability easier (and avoid us the trouble). This is particularly troublesome since the whole point of the paper is to be quantitative, that is, making the best prediction.
+First of all, we very thankful to the authors kindness in sharing with us the data to replicate the paper. However, it would have been nice to have a replication package, since this would make verifiability easier (and avoid us the trouble). This is particularly troublesome since the whole point of the paper is to be quantitative, that is, making the best prediction. As we saw above, none of the precise estimates could be matched. What exactly is going on in their code? This flaw fault may be considerably more on our side than theirs, but we're unable to tell this -- even if we had all the time to recreate the zillions of the tables and models they provide, which we don't...
 
-However, on top of that, the paper is frequently confusing in terms of the temporal choices for their variables. Probably trying to get more data by using a quaterly frequency, they made the paper more confusing then it would be so by using estimates on an annual basis. Nevertheless, probably in daily forecasting activities data forecast are done more on a quarterly basis, which gives practitioners good advice as how to perform it.
+However, on top of that, the paper is frequently confusing in terms of the temporal choices for their variables. Specially, using the data that *they provided* we can't be reassured of the time periods for each of the variables -- more so on real economic measures. Also, probably trying to get more data by using a quarterly frequency, they made the paper more confusing then it would be so by using estimates on an annual basis. Nevertheless, probably in daily forecasting activities data forecast are done more on a quarterly basis, which gives practitioners good advice as how to perform it.
 
-Finally, seasonality ...
-
-Why in the real activity measures we don't let it affect contemporaneously.
+Finally, although they do perform some robustness checks, their choices for a numerous of periods to stop or specific models seemed kind of ad hoc. Many of these pitfalls could be solved by nowadays relative common machine learning techniques.
