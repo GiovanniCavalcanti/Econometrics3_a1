@@ -39,7 +39,7 @@ panel_a <- kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c(""
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
 
-panel_a
+(panel_a)
 
 rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
@@ -96,7 +96,7 @@ panel_b <- kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c(""
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
 
-panel_b
+(panel_b)
 
 rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
@@ -145,7 +145,7 @@ panel_c <- panel_c %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel C (latex code)
-kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+panel_c <- kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -153,7 +153,7 @@ kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", 
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
 
-
+(panel_c)
 # Clear environment
 rm(panel_c, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 rm(df_inflation_authors_B, df_inflation_authors_C, df_inflation_authors_yearly_B, df_inflation_authors_yearly_C, statistics_labels)

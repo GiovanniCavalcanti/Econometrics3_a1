@@ -659,9 +659,10 @@ Philadelphia Fed website (<a href="http://" class="uri">http://</a>
 www.phil.frb.org/econ/liv and <a href="http://www.phil.frb.org/econ/spf" class="uri">http://www.phil.frb.org/econ/spf</a>, respectively)</p>
 <p>We take the Michigan survey data from the St. Louis Federal Reserve
 FRED database (<a href="http://research.stlouisfed.org/fred2/series/MICH/" class="uri">http://research.stlouisfed.org/fred2/series/MICH/</a>)</p>
-<p>We’ll do the following procedure: first we gather data, save it to
-new files and then for each part we load the data again.</p>
-<p>And now data from Brazil.</p>
+<p>We’ll do the following procedure: first we gather data into the
+environment, save it to new files and, and given the necessity, reload
+them in each new chunk.</p>
+<p>And the same for Brazilian data.</p>
 </div>
 <div id="summary-statistics" class="section level2">
 <h2>Summary statistics</h2>
@@ -671,7 +672,7 @@ the following figures.</p>
 worth noting that although their first year of analysis is 1952, PUXX
 only starts to have data at 1957 (even though they use data starting
 from 1958).</p>
-<pre class="r"><code>source(&quot;replication_a1_summary-stats.R&quot;, local = knitr::knit_global())</code></pre>
+<pre class="r"><code>source(&quot;replication_a1_summary-stats.R&quot;)</code></pre>
 <pre><code>## New names:
 ## Rows: 203 Columns: 8
 ## ── Column specification
@@ -699,10 +700,45 @@ from 1958).</p>
 ## Joining with `by = join_by(quarter, group)`
 ## Joining with `by = join_by(quarter, group)`</code></pre>
 <p>The results of these scripts can been seen by checking the folders
-‘table’ and ‘figures’ on the github repository.</p>
+‘table’ and ‘figures’ on the github repository. We were unalbe to print
+their results directly into the markdown file.</p>
 </div>
 <div id="estimating-the-models" class="section level2">
 <h2>Estimating the models</h2>
+<div id="survey-analysis" class="section level3">
+<h3>Survey analysis</h3>
+<p>On the following script, there are the necessary values to construct
+table 3, and table 4. For better understanding, We recommend to run it
+separately.</p>
+<pre class="r"><code>source(&quot;replication_a1_survey_models.R&quot;)</code></pre>
+<pre><code>## Joining with `by = join_by(quarter, group)`</code></pre>
+<pre><code>##       Column1   Column2      RMSE
+## 2  punew_year  spf_year 0.8903341
+## 3  punew_year  liv_year 1.2398408
+## 4  punew_year mich_year 2.0039473
+## 5  puxhs_year  spf_year 1.1235984
+## 6  puxhs_year  liv_year 1.3500308
+## 7  puxhs_year mich_year 1.8953104
+## 8   puxx_year  spf_year 0.7317059
+## 9   puxx_year  liv_year 1.0645523
+## 10  puxx_year mich_year 1.9841929
+## 11   pce_year  spf_year 0.9731781
+## 12   pce_year  liv_year 1.2537485
+## 13   pce_year mich_year 1.5379626
+##       Column1    Column2      RMSE
+## 2  punew_year  spf_year2 0.9703101
+## 3  punew_year  liv_year2 1.3662611
+## 4  punew_year mich_year2 2.0355253
+## 5  puxhs_year  spf_year2 0.9833412
+## 6  puxhs_year  liv_year2 1.3552944
+## 7  puxhs_year mich_year2 1.9037783
+## 8   puxx_year  spf_year2 1.1307862
+## 9   puxx_year  liv_year2 1.1800983
+## 10  puxx_year mich_year2 2.0051321
+## 11   pce_year  spf_year2 0.4927204
+## 12   pce_year  liv_year2 1.1032676
+## 13   pce_year mich_year2 1.5324703</code></pre>
+</div>
 <div id="time-series-models" class="section level3">
 <h3>Time-Series Models</h3>
 <p>Here we’ll estimate the ARMA, AR, RW and AORW.</p>

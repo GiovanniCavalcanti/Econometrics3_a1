@@ -1,5 +1,5 @@
 # Clear workspace and load necessary packages
-rm(list = ls())
+
 library(tidyverse)
 library(quantmod)
 library(forecast)
@@ -156,3 +156,5 @@ for (col1 in group1) {
 results_df_model2$RMSE <- as.numeric(as.character(results_df_model2$RMSE))
 results_df_model2 <- results_df_model2[2:nrow(results_df_model2),]
 
+print(results_df_model1)
+print(results_df_model2)

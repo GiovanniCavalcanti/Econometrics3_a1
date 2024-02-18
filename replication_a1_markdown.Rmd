@@ -6,6 +6,7 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
+rm(list = ls())
 knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
@@ -224,16 +225,16 @@ Obtain data for the Livingston survey and SPF data from the Philadelphia Fed web
 
 We take the Michigan survey data from the St. Louis Federal Reserve FRED database (http://research.stlouisfed.org/fred2/series/MICH/)
 
-We'll do the following procedure: first we gather data, save it to new files and then for each part we load the data again.
+We'll do the following procedure: first we gather data into the environment, save it to new files and, and given the necessity, reload them in each new chunk.
 
 ```{r, include=FALSE}
-source("replication_a1_data-only.R", local = knitr::knit_global())
+source("replication_a1_data-only.R")
 ```
 
-And now data from Brazil.
+And the same for Brazilian data.
 
 ```{r, include=FALSE}
-source("replication_a1_data_brazil.R", local = knitr::knit_global())
+source("replication_a1_data_brazil.R")
 ```
 
 ## Summary statistics
@@ -243,16 +244,25 @@ Here we replicate table 1 of Summary Statistics from the paper and the following
 First, we do it for the exactly the period of their analysis. It's worth noting that although their first year of analysis is 1952, PUXX only starts to have data at 1957 (even though they use data starting from 1958).
 
 ```{r}
-source("replication_a1_summary-stats.R", local = knitr::knit_global())
+source("replication_a1_summary-stats.R")
 ```
 
 ```{r}
 source("replication_a1_summary-stats_figures.R", local = knitr::knit_global())
 ```
 
-The results of these scripts can been seen by checking the folders 'table' and 'figures' on the github repository.
+The results of these scripts can been seen by checking the folders 'table' and 'figures' on the github repository. We were unalbe to print their results directly into the markdown file.
 
 ## Estimating the models
+
+### Survey analysis
+
+On the following script, there are the necessary values to construct table 3, and table 4. For better understanding, We recommend to run it separately.
+
+```{r}
+source("replication_a1_survey_models.R")
+```
+
 
 ### Time-Series Models
 
