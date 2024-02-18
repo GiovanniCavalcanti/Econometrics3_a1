@@ -206,10 +206,9 @@ print(table_ts_1995)
 # BRAZIL ----
 # ---
 
-# test this part
-
 # load data
-df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv')
+df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv') %>% 
+  filter(group >= 1999)
 
 # new series!
 inflation_series <- c('ipca', 'ipca_15', 'exfe')
@@ -218,15 +217,17 @@ inflation_series <- c('ipca', 'ipca_15', 'exfe')
 arma11_rmse_brazil <- c()
 arp_rmse_brazil <- c()
 arma11_forecasts_brazil <- list()
+new_start <- 2015
+new_end <- 2023
 # same models as previously
 for (x in 1:length(inflation_series)) {
   print(inflation_series[x])
   # first the simple rmse values for each inflation series
-  arma11_rmse_brazil[x] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], initial_end = 2010)
-  arp_rmse_brazil[x] <- rolling_forecast_ar_p(df_inflation_brazil, inflation_series[x])
+  arma11_rmse_brazil[x] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], initial_end = new_start, final_date = new_end)
+  arp_rmse_brazil[x] <- rolling_forecast_ar_p(df_inflation_brazil, inflation_series[x], initial_end = new_start, final_date = new_end)
   
   # we need also the forecasts of the arma11 model to run the lambda models
-  arma11_forecasts_brazil[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], return_rmse = F, initial_end = 2010)
+  arma11_forecasts_brazil[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], return_rmse = F, initial_end = new_start, final_date = new_end)
 }
 
 # printing info
@@ -237,7 +238,7 @@ just_rmse <- c()
 relative_rmse <- c()
 for (x in 1:length(arma11_rmse)) {
   just_rmse <- c(just_rmse, arma11_rmse[x], arp_rmse_brazil[x])
-  relative_rmse_aux <- c(arma11_rmse[x], arp_rmse_brazil[x])
+  relative_rmse_aux <- c(arma11_rmse[x]/arma11_rmse[x], arp_rmse_brazil[x]/arma11_rmse[x])
   relative_rmse <- c(relative_rmse, relative_rmse_aux)
 }
 values_estats <- list(just_rmse, relative_rmse)
@@ -249,3 +250,5 @@ print(table_ts_brazil)
 # ---
 
 rolling_forecast_arma(df_inflation_authors, inflation_series[1], return_rmse = T)
+
+rolling_forecast_arma(df_inflation_brazil, inflation_series[1], initial_end = 2010, final_date = 2024)

@@ -86,7 +86,7 @@ best_lag_ols <- function(df_lag, y, lag_until=5, criteria='bic'){
   # then find the best order
   best_order <- which(min(bic_models) == bic_models)
   
-  return(models[[best_order]])
+  return(models[[best_order[1]]])
 }
 
 # todo: use a rolling window?
@@ -160,7 +160,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -204,7 +205,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -255,7 +257,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -300,7 +303,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -322,8 +326,6 @@ print(table_term_structure_specific)
 # BRAZIL ----
 # ---
 
-# todo: end this part
-
 # load data
 df_inflation_brazil <- read.csv("brazil_data/df_inflation_brazil.csv")
 df_realmeasures_brazil <- read.csv("brazil_real_measures_data/df_realmeasures_brazil.csv")
@@ -332,17 +334,71 @@ df_realmeasures_brazil <- read.csv("brazil_real_measures_data/df_realmeasures_br
 df_phillips_brazil <- df_inflation_brazil %>%
   left_join(df_realmeasures_brazil) %>% 
   tibble() %>%
-  arrange(FirstDate)
+  arrange(FirstDate) %>% 
+  filter(group <= 2023, group >=1999)
 
 # new definitions
 all_y <- c('ipca', 'ipca_15', 'exfe')
-x_brazil <- c("gdpg", "gap1", "gap2", "unrate", "lshr")
+x_brazil <- list("gdpg", "gap1", "gap2", "unrate", "lshr", c('gap1', 'lshr'), c('gap2', 'lshr'))
+x_names <- sapply(x_brazil, function(x) paste(x, collapse=' + '))
+initial_estimation_period <- 2015
+arma11_rmse <- arma11_rmse_brazil
+arma11_forecasts <- arma11_forecasts_brazil
 
-# the loops...
+# the loops for the phillips curve models
+
+# two loops, one for the dependent variable, other for the independent variable
+rmse <- c()
+lambda_phillips <- c()
+hh_se_phillips <- c()
+nw_se_phillips <- c()
+for (y in all_y) {
+  print(y)
+  for (x in x_brazil) {
+    print(x)
+    # define all the dataframes relevant
+    df_lag <- lag_df(df_phillips_brazil, y, x)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
+    
+    # get forecast
+    forecast_values <- ols_predict(train_data, test_data, y, x)
+    
+    # todo: store the arma11 rmse from previous exercise
+    # compute (relative) rmse
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
+    
+    # compute 1-lambda
+    arma11_forecasts_now <- arma11_forecasts[[y]]
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
+    model_lambda <- lm(reg_formula_lambda, data=test_data)
+    lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
+    # standard-error first with HH-error
+    hh_se_phillips <- c(hh_se_phillips ,kernHAC(model_lambda, kernel = "Truncated")[3,3])
+    # then with NW-error
+    nw_se_phillips <- c(nw_se_phillips, NeweyWest(model_lambda)[3,3])
+  }
+}
+
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_brazil))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_ols <- create_table_inflation_models(values_estats, all_y, x_names)
+
 
 # # ---
 # # Test section  ----
 # # ---
+
+df_lag <- lag_df(df_phillips_brazil, 'ipca', c('gap1', 'lshr'))
+train_data <- df_lag %>% filter(group <= 2015)
+test_data <- df_lag %>% filter(group > 2015)
+
+# get forecast
+model <- best_lag_ols(train_data, 'ipca', lag_until = 5)
+forecast_values <- ols_predict(train_data, test_data, 'ipca', c('gap1', 'lshr'))
+
 # 
 # # a similar to the main loop above
 # 

@@ -1162,15 +1162,118 @@ Repeat all models for Brazilian data.
 
 ### Time-Series Models
 
+We pick as 2015 as the point of division of our inflation train to test sample. We let our data run up until the first quarter of 2023 (indeed, as the authors, we let our data to be at that frequency, although we have at a monthly frequency). This makes a division of approximately 2/3 (train/test), because we let the data to start to run at 1999 (to avoid periods of hyperinflation and to make all series equally available). We pick three series: IPCA, IPCA-15 and EXFE. However, changing some of those specifications don't lead usto different conclusions.
+
+The models indicate that AR(p) models always perform better than the ARMA(1,1) models by considerable margin.
+
 ```{r ts_brazil}
+
+# load data
+df_inflation_brazil <- read_csv('brazil_data/df_inflation_brazil.csv') %>% 
+  filter(group >= 1999)
+
+# new series!
+inflation_series <- c('ipca', 'ipca_15', 'exfe')
+
+# values to store
+arma11_rmse_brazil <- c()
+arp_rmse_brazil <- c()
+arma11_forecasts_brazil <- list()
+new_start <- 2015
+new_end <- 2023
+# same models as previously
+for (x in 1:length(inflation_series)) {
+  print(inflation_series[x])
+  # first the simple rmse values for each inflation series
+  arma11_rmse_brazil[x] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], initial_end = new_start, final_date = new_end)
+  arp_rmse_brazil[x] <- rolling_forecast_ar_p(df_inflation_brazil, inflation_series[x], initial_end = new_start, final_date = new_end)
+  
+  # we need also the forecasts of the arma11 model to run the lambda models
+  arma11_forecasts_brazil[[inflation_series[x]]] <- rolling_forecast_arma(df_inflation_brazil, inflation_series[x], return_rmse = F, initial_end = new_start, final_date = new_end)
+}
+
+# printing info
+arma11_rmse <- arma11_rmse_brazil
+#
+# a loop to get values in the way the table is constructed in the paper
+just_rmse <- c()
+relative_rmse <- c()
+for (x in 1:length(arma11_rmse)) {
+  just_rmse <- c(just_rmse, arma11_rmse[x], arp_rmse_brazil[x])
+  relative_rmse_aux <- c(arma11_rmse[x]/arma11_rmse[x], arp_rmse_brazil[x]/arma11_rmse[x])
+  relative_rmse <- c(relative_rmse, relative_rmse_aux)
+}
+values_estats <- list(just_rmse, relative_rmse)
+table_ts_brazil <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
+print(table_ts_brazil)
 
 ```
 
 
 ### OLS: Phillips Curve + Term Structure Models
 
-```{r phillips_term-structure_brazil}
+Same periods of analysis as in the previous time-series models.
 
+```{r phillips_term-structure_brazil}
+# load data
+df_inflation_brazil <- read.csv("brazil_data/df_inflation_brazil.csv")
+df_realmeasures_brazil <- read.csv("brazil_real_measures_data/df_realmeasures_brazil.csv")
+
+# Prepare data
+df_phillips_brazil <- df_inflation_brazil %>%
+  left_join(df_realmeasures_brazil) %>% 
+  tibble() %>%
+  arrange(FirstDate) %>% 
+  filter(group <= 2023, group >=1999)
+
+# new definitions
+all_y <- c('ipca', 'ipca_15', 'exfe')
+x_brazil <- list("gdpg", "gap1", "gap2", "unrate", "lshr", c('gap1', 'lshr'), c('gap2', 'lshr'))
+x_names <- sapply(x_brazil, function(x) paste(x, collapse=' + '))
+initial_estimation_period <- 2015
+arma11_rmse <- arma11_rmse_brazil
+arma11_forecasts <- arma11_forecasts_brazil
+
+# the loops for the phillips curve models
+
+# two loops, one for the dependent variable, other for the independent variable
+rmse <- c()
+lambda_phillips <- c()
+hh_se_phillips <- c()
+nw_se_phillips <- c()
+for (y in all_y) {
+  print(y)
+  for (x in x_brazil) {
+    print(x)
+    # define all the dataframes relevant
+    df_lag <- lag_df(df_phillips_brazil, y, x)
+    train_data <- df_lag %>% filter(group <= initial_estimation_period)
+    test_data <- df_lag %>% filter(group > initial_estimation_period)
+    
+    # get forecast
+    forecast_values <- ols_predict(train_data, test_data, y, x)
+    
+    # todo: store the arma11 rmse from previous exercise
+    # compute (relative) rmse
+    rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
+    
+    # compute 1-lambda
+    arma11_forecasts_now <- arma11_forecasts[[y]]
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
+    model_lambda <- lm(reg_formula_lambda, data=test_data)
+    lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
+    # standard-error first with HH-error
+    hh_se_phillips <- c(hh_se_phillips ,kernHAC(model_lambda, kernel = "Truncated")[3,3])
+    # then with NW-error
+    nw_se_phillips <- c(nw_se_phillips, NeweyWest(model_lambda)[3,3])
+  }
+}
+
+# calculate the relative rmse to arma11
+relative_rmse <- rmse/rep(arma11_rmse, each=length(x_brazil))
+# define a list to pass to the function to create tables paper-like
+values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
+table_ols <- create_table_inflation_models(values_estats, all_y, x_names)
 ```
 
 ## Critical part
