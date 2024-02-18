@@ -167,9 +167,7 @@ Here we replicate table 1 of Summary Statistics from the paper and the following
 
 First, we do it for the exactly the period of their analysis. It's worth noting that although their first year of analysis is 1952, PUXX only starts to have data at 1957 (even though they use data starting from 1958).
 
-```{r, include=FALSE}
-source("replication_a1_summary-stats.R", local = knitr::knit_global())
-```
+[summary statistics]
 
 ## Estimating the models
 
@@ -179,13 +177,13 @@ Here we'll estimate the ARMA, AR, RW and AORW.
 
 ```{r time_series_models}
 
-# Load dataframes used ------------------------
+# 02 load dataframes used ------------------------
 
 df_inflation_complete <- read.csv(file = "data/output/df_inflation_complete.csv")
 df_inflation_authors <- read.csv(file = "data/output/df_inflation_authors.csv")
 df_inflation_authors_yearly <- read.csv(file = "data/output/df_inflation_authors_yearly.csv")
 
-# Models ------------------------------------
+# 03 models ------------------------------------
 
 # Function to perform rolling window forecasting with ARMA(1,1) over years
 rolling_forecast_arma <- function(data, series_name, order_ar=1, order_ma=1, initial_end=1985, final_date=2002, window_size=4, return_rmse=T) {
@@ -275,6 +273,25 @@ best_arma_order <- function(series, ar_until = 10, ma_order = 0, info_criteria =
   return(arma_best_order)
 }
 
+# creates a matrix with (y*x) rows and (estats) columns
+create_table_inflation_models <- function(values_estats, y, x, estats=c('relative_rmse', '1-lambda', 'hh_error', 'nw_error')){
+  # values_stats should be a list of same size as the estats, each value being y*x size (in that order)
+  # storing data for table
+  table_paper <- matrix(NA, length(y)*length(x), length(estats))  # just for a single estimation period
+  # prettify
+  colnames(table_paper) <- estats
+  names_inflation <- rep(y, each=length(x))
+  names_models <- rep(x, length(y))
+  rownames(table_paper) <- paste(names_inflation, names_models, sep=' | ')
+  
+  # adding values
+  for (p in 1:length(estats)) {
+    table_paper[,p] <- values_estats[[p]]
+  }
+  
+  return(table_paper)
+}
+
 # running the functions
 inflation_series <- df_inflation_authors %>% select(starts_with('inflation')) %>% colnames()
 
@@ -346,7 +363,6 @@ for (x in 1:length(arma11_rmse)) {
 values_estats <- list(just_rmse, relative_rmse)
 table_ts_1995 <- create_table_inflation_models(values_estats, inflation_series, c('ARMA', 'AR'), c('RMSE', 'ARMA=1'))
 print(table_ts_1995)
-
 ```
 
 ### Phillips Curve (OLS) + Time Structure models
@@ -441,7 +457,7 @@ best_lag_ols <- function(df_lag, y, lag_until=5, criteria='bic'){
   # then find the best order
   best_order <- which(min(bic_models) == bic_models)
   
-  return(models[[best_order]])
+  return(models[[best_order[1]]])
 }
 
 # todo: use a rolling window?
@@ -515,7 +531,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -530,7 +547,7 @@ relative_rmse <- rmse/rep(arma11_rmse, each=length(x_phillips))
 # define a list to pass to the function to create tables paper-like
 values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
 table_ols <- create_table_inflation_models(values_estats, all_y, x_phillips)
-
+print(table_ols)
 
 # ---
 # now do it for models with double x's
@@ -555,12 +572,12 @@ for (y in all_y) {
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
     
-    # todo: store the arma11 rmse from previous exercise
     # compute (relative) rmse
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -611,7 +628,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -656,7 +674,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -719,7 +738,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -734,7 +754,7 @@ relative_rmse <- rmse/rep(arma11_rmse, each=length(x_phillips))
 # define a list to pass to the function to create tables paper-like
 values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
 table_ols <- create_table_inflation_models(values_estats, all_y, x_phillips)
-
+print(table_ols)
 
 # ---
 # now do it for models with double x's
@@ -759,12 +779,12 @@ for (y in all_y) {
     # get forecast
     forecast_values <- ols_predict(train_data, test_data, y, x)
     
-    # todo: store the arma11 rmse from previous exercise
     # compute (relative) rmse
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -815,7 +835,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -860,7 +881,8 @@ for (y in all_y) {
     rmse <- c(rmse, sqrt(sum((test_data[y] - forecast_values)^2, na.rm=T)))
     
     # compute 1-lambda
-    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts[["inflation_punew"]] + forecast_values'))
+    arma11_forecasts_now <- arma11_forecasts[[y]]     
+    reg_formula_lambda <- formula(paste0(y, '~ arma11_forecasts_now + forecast_values'))
     model_lambda <- lm(reg_formula_lambda, data=test_data)
     lambda_phillips <- c(lambda_phillips ,coef(model_lambda)[3])
     # standard-error first with HH-error
@@ -889,7 +911,7 @@ Repeat all models for Brazilian data.
 
 ### Time-Series Models
 
-We pick as 2015 as the point of division of our inflation train to test sample. We let our data run up until the first quarter of 2023 (indeed, as the authors, we let our data to be at that frequency, although we have at a monthly frequency). This makes a division of approximately 2/3 (train/test), because we let the data to start to run at 1999 (to avoid periods of hyperinflation and to make all series equally available). We pick three series: IPCA, IPCA-15 and EXFE. However, changing some of those specifications don't lead usto different conclusions.
+We pick as 2015 as the point of division of our inflation train to test sample. We let our data run up until the first quarter of 2023 (indeed, as the authors, we let our data to be at that frequency, although we have at a monthly frequency). This makes a division of approximately 2/3 (train/test), because we let the data to start to run at 1999 (to avoid periods of hyperinflation and to make all series equally available). We pick three series: IPCA, IPCA-15 and EXFE. However, changing some of those specifications don't lead us to different conclusions.
 
 The models indicate that AR(p) models always perform better than the ARMA(1,1) models by considerable margin.
 
@@ -1001,6 +1023,7 @@ relative_rmse <- rmse/rep(arma11_rmse, each=length(x_brazil))
 # define a list to pass to the function to create tables paper-like
 values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
 table_ols <- create_table_inflation_models(values_estats, all_y, x_names)
+print(table_ols)
 ```
 
 ## Critical part

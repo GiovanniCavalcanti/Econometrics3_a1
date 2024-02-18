@@ -176,7 +176,7 @@ relative_rmse <- rmse/rep(arma11_rmse, each=length(x_phillips))
 # define a list to pass to the function to create tables paper-like
 values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
 table_ols <- create_table_inflation_models(values_estats, all_y, x_phillips)
-
+print(table_ols)
 
 # ---
 # now do it for models with double x's
@@ -385,7 +385,7 @@ relative_rmse <- rmse/rep(arma11_rmse, each=length(x_brazil))
 # define a list to pass to the function to create tables paper-like
 values_estats <- list(relative_rmse, lambda_phillips, hh_se_phillips, nw_se_phillips)
 table_ols <- create_table_inflation_models(values_estats, all_y, x_names)
-
+print(table_ols)
 
 # # ---
 # # Test section  ----
