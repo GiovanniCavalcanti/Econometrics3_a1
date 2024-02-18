@@ -17,6 +17,7 @@ library(gt)
 library(tibble)
 library(knitr)
 library(kableExtra)
+library(sandwich)
 ```
 
 ## What do we need to replicate?
