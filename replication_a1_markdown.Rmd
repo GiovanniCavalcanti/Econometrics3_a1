@@ -26,7 +26,7 @@ As exposed in the guidelines, we need to replicate all tables and figures **exce
 
 Altering table 2 from the paper to exclude these models, we have:
 
-```{r models}
+```{r models, echo=FALSE}
 # Create the data frame
 models_table <- data.frame(
  Description = c(
@@ -150,6 +150,80 @@ Data from the paper.
 
 Part of the data (mainly from real data sources and when it comes from other papers) was gathered through the authors data replication kit (asked by e-mail).
 
+There are four different measures of inflation. The first three are consumer prices index (CPI) measures, including
+
+- CPI-U for all urban consumers, all items (PUNEW),
+    
+- CPI for all urban consumers, all items less shelter (PUXHS)
+    
+- and CPI for all urban consumers, all items less food and energy (PUXX), which is also called core CPI.
+
+The fourth measure is the personal consumption expenditure deflator (PCE)
+
+All measures are seasonally adjusted and obtained from the **Bureau of Labor Statistics** website.
+
+The sample period is
+
+- 1952:Q2–2002:Q4 for PUNEW and PUXHS,
+    
+- 1958:Q2–2002:Q4 for PUXX,
+    
+- 1960:Q2–2002:Q4 for PCE
+    
+
+## Real activities measures
+
+Six different measures of real activity along with one composite real activity factor.
+
+- gdpg: GDP growth using seasonally adjusted data on real GDP in billions of chained 2000 dollars.
+    
+- unemp: Unemployment rate is also seasonally adjusted and computed for the civilian labor force aged 16 years and over
+    
+
+Both real GDP and the unemployment rate are from the Federal Reserve economic data (FRED) database.
+
+- gap1: output gap either as the detrended log real GDP by removing a quadratic trend as in Gali and Gertler (1999).
+    
+- gap2: Hodrick–Prescott (1997) filter (with the standard smoothness parameter of 1,600).
+    
+
+Both measures are constructed using only current and past GDP values, so the filters are run recursively.
+
+- lshr: labor income share, defined as the ratio of nominal compensation to total nominal output in the U.S. nonfarm business sector.
+    
+
+Two forward-looking indicators:
+
+- li: Stock–Watson (1989) experimental leading index (LI).
+    
+- xli: “Stock–Watson (1989) alternative nonfinancial experimental leading index-2
+    
+
+Because Stock and Watson (2002a), among others, show that aggregating the information from many factors has good forecasting power, we also use a single factor aggregating the information from 65 individual series constructed by Bernanke et al. (2005).
+
+- fac: aggregates real output and income, employment and hours, consumption, housing starts and sales, real inventories, and average hourly earnings.
+    
+
+The sample period for all the real activity measures is 1952:Q2–2001:Q4, except the Bernanke–Boivin–Eliasz real activity factor, which spans 1959:Q1–2001:Q3.
+
+## Surveys
+
+We examine three inflation expectation surveys: the Livingston survey, the survey of professional forecasters (SPF), and the Michigan survey.
+
+The Livingston survey is conducted twice a year, in June and in December, and polls economists from industry, government, and academia. The Livingston survey records participants’ forecasts of non-seasonally adjusted CPI levels six and twelve months in the future and is usually conducted in the middle of the month.
+
+We follow Thomas (1999) and Mehra (2002) and adjust the raw Livingston forecasts by a factor of 12/14 to obtain an annual inflation forecast.
+
+The CPI variable is the most requested variable of the Livingston Survey’s data set; it is, therefore, also the most scrutinized.  Several minor inconsistencies characterize this variable.  The problems usually arise because Joseph Livingston requested forecasts for CPI levels rather than inflation rates.  Users should also know that these forecasts are for the not-seasonally adjusted level of the CPI in surveys prior to December 2004. Beginning with the survey of December 2004, we asked the panelists to provide forecasts for the seasonally adjusted index level.  
+
+Participants in the SPF are drawn primarily from business, and forecast changes in the quarterly average of seasonally adjusted CPI-U levels. The SPF is conducted in the middle of every quarter and the sample period for the SPF median forecasts is from 1981:Q3 to 2002:Q4.
+
+The Michigan survey is conducted monthly and asks households, rather than professionals, to estimate expected price changes over the next twelvemonths.We use the median Michigan survey forecast of inflation over the next year at the end of each quarter from 1978:Q1 to 2002:Q4.
+
+Obtain data for the Livingston survey and SPF data from the Philadelphia Fed website (http:// www.phil.frb.org/econ/liv and http://www.phil.frb.org/econ/spf, respectively)
+
+We take the Michigan survey data from the St. Louis Federal Reserve FRED database (http://research.stlouisfed.org/fred2/series/MICH/)
+
 We'll do the following procedure: first we gather data, save it to new files and then for each part we load the data again.
 
 ```{r, include=FALSE}
@@ -168,7 +242,15 @@ Here we replicate table 1 of Summary Statistics from the paper and the following
 
 First, we do it for the exactly the period of their analysis. It's worth noting that although their first year of analysis is 1952, PUXX only starts to have data at 1957 (even though they use data starting from 1958).
 
-[summary statistics]
+```{r}
+source("replication_a1_summary-stats.R", local = knitr::knit_global())
+```
+
+```{r}
+source("replication_a1_summary-stats_figures.R", local = knitr::knit_global())
+```
+
+The results of these scripts can been seen by checking the folders 'table' and 'figures' on the github repository.
 
 ## Estimating the models
 

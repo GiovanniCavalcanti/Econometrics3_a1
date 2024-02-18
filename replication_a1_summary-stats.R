@@ -31,13 +31,15 @@ panel_a <- panel_a %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel A (latex code)
-kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+panel_a <- kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
   pack_rows("Standard deviation", 2, 2) %>%
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
+
+panel_a
 
 rm(panel_a, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
@@ -86,13 +88,15 @@ panel_b <- panel_b %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel B (latex code)
-kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+panel_b <- kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
   pack_rows("Standard deviation", 2, 2) %>%
   pack_rows("Autocorrelation", 3, 3) %>%
   pack_rows("Correlations", 4, 6)
+
+panel_b
 
 rm(panel_b, sds, means, autocorrelation_quaterly, corr_table, data_variables)
 
@@ -237,7 +241,7 @@ panel_b <- panel_b %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel B (latex code)
-kable(panel_b, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2023:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -292,7 +296,7 @@ panel_c <- panel_c %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel C (latex code)
-kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2023:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -310,6 +314,7 @@ rm(df_inflation_complete_B, df_inflation_complete_C, df_inflation_complete_yearl
 # Multiply the inflation columns by 100
 
 data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   mutate(across(ends_with("year"), ~ .x * 100)) %>%
   full_join(., df_livingston_complete)  %>%
   filter(group < 2003 & group >1951)
@@ -342,7 +347,7 @@ plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, colo
         legend.position = "top",
         axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave("fig1a.pdf", plot_1a, width = 11, height = 8.5)
+plot_1a
 
 rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
@@ -350,6 +355,7 @@ rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
 data_plot1B <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   filter(group >= 1978 & group <= 2002) %>%
   left_join(df_surveys_complete) %>%
   select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
@@ -380,7 +386,7 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, colo
         legend.position = "top",
         axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave("fig1b.pdf", plot_1B, width = 11, height = 8.5)
+plot_1B
 
 rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 
@@ -389,6 +395,7 @@ rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
 # Multiply the inflation columns by 100
 
 data_plot1A <- df_inflation_authors_yearly %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   mutate(across(ends_with("year"), ~ .x * 100)) %>%
   full_join(., df_livingston_complete)
 
@@ -419,7 +426,7 @@ plot_1a <- ggplot(data_plot1A_long, aes(x = FirstDate, y = inflation_value, colo
         legend.position = "top",
         axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave("fig1a_extended.pdf", plot_1a, width = 11, height = 8.5)
+plot_1a
 
 rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
@@ -428,6 +435,7 @@ rm(plot_1a, data_plot1A, data_plot1A_long, line_types, shapes)
 
 data_plot1B <- df_inflation_authors_yearly %>%
   mutate(across(ends_with("punew_year"), ~ .x * 100)) %>%
+  mutate(quarter = as.yearqtr(FirstDate)) %>%
   left_join(df_surveys_complete) %>%
   select(FirstDate, quarter, group, punew_year, liv_year, mich_year, spf_year)
 
@@ -457,6 +465,6 @@ plot_1B <- ggplot(data_plot1B_long, aes(x = FirstDate, y = inflation_value, colo
         legend.position = "top",
         axis.text.x = element_text(angle = 45, hjust = 1))
 
-ggsave("fig1b_extended.pdf", plot_1B, width = 11, height = 8.5)
+plot_1B
 
 rm(plot_1B, data_plot1B, data_plot1B_long, line_types, shapes)
