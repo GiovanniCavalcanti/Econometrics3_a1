@@ -381,13 +381,10 @@ Moreover, since the process is basically the same as before for the term structu
 
 As previously, we first do for the 1985 period, then for 1995.
 
-```{r phillips_term-structure}
+```{r phillips_term-structure1985}
 # ---
 # Load data ----
 # ---
-
-# this value will come from other part of the markdown
-# arma11_rmse <- c(0.8938677, 0.8336303, 0.9984834, 0.8883241)
 
 # df_inflation_complete <- read.csv("df_inflation_complete.csv")
 df_inflation_authors <- read.csv("data/output/df_inflation_authors.csv")
@@ -696,7 +693,7 @@ print(table_term_structure_specific)
 
 Now for 1995.
 
-```{r phillips_term-structure}
+```{r phillips_term-structure1995}
 
 # ---
 # Run ----
