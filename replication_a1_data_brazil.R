@@ -1,6 +1,5 @@
 # 01 Environment and packages --------------------------------------------------
 # Clear the workspace to ensure a clean environment for the analysis.
-rm(list = ls())
 
 # Load necessary R packages for data manipulation, visualization, and analysis.
 # These libraries provide a wide range of functions for data processing, financial modeling,
