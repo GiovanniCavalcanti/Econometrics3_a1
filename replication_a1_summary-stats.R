@@ -5,6 +5,8 @@
 
 ### Panel A --------------------------------------------------
 
+df_inflation_authors <- read_csv('data/output/df_inflation_authors.csv')
+df_inflation_authors_yearly <- read_csv('data/output/df_inflation_authors_yearly.csv')
 data_variables <- select(df_inflation_authors_yearly, ends_with('year'))
 
 # Calculate summary statistics
@@ -29,7 +31,7 @@ panel_a <- panel_a %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel A (latex code)
-kable(panel_a, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel A: 1952:Q2–2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -84,7 +86,7 @@ panel_b <- panel_b %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel B (latex code)
-kable(panel_b, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_b, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel B: 1986:Q1– 2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -139,7 +141,7 @@ panel_c <- panel_c %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel C (latex code)
-kable(panel_c, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_c, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel C: 1996:Q1– 2002:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
@@ -180,7 +182,7 @@ panel_a <- panel_a %>%
   mutate(across(where(is.numeric), ~ round(., 2)))
 
 # Generate the table 1, panel A (latex code)
-kable(panel_a, "latex", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
+kable(panel_a, "html", booktabs = TRUE, align = 'c', col.names = c("", "PUNEW", "PUXHS", "PUXX", "PCE")) %>%
   kable_styling(latex_options = c("striped", "hold_position")) %>%
   add_header_above(c(" " = 1, "Panel A: 1947:Q1–2023:Q4" = 4)) %>%
   pack_rows("Mean", 1, 1) %>%
